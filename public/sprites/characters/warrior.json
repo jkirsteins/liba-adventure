@@ -1,0 +1,40 @@
+{
+  "source": "GandalfHardcore FREE Warrior",
+  "image": "warrior.png",
+  "imageSize": { "w": 800, "h": 1088 },
+  "frame": { "w": 80, "h": 64 },
+  "grid": { "cols": 10, "rows": 17 },
+  "totalFrames": 170,
+  "animations": {
+    "unarmed": {
+      "idle-down": { "row": 0, "from": 0, "to": 4, "frames": 5 },
+      "run-down": { "row": 1, "from": 10, "to": 17, "frames": 8 },
+      "run-side": { "row": 2, "from": 20, "to": 27, "frames": 8 },
+      "jump": { "row": 3, "from": 30, "to": 33, "frames": 4 },
+      "emote": { "row": 4, "from": 40, "to": 43, "frames": 4 },
+      "attack": { "row": 5, "from": 50, "to": 53, "frames": 4 },
+      "death": { "row": 6, "from": 60, "to": 63, "frames": 4 }
+    },
+    "armed": {
+      "idle-down": { "row": 7, "from": 70, "to": 73, "frames": 4, "confidence": "medium" },
+      "walk-down": { "row": 8, "from": 80, "to": 84, "frames": 5, "confidence": "medium" },
+      "walk-side": { "row": 9, "from": 90, "to": 97, "frames": 8, "confidence": "medium" },
+      "walk-side-alt": { "row": 10, "from": 100, "to": 107, "frames": 8, "confidence": "medium" },
+      "attack": { "row": 11, "from": 110, "to": 117, "frames": 8, "confidence": "medium" },
+      "jump": { "row": 12, "from": 120, "to": 124, "frames": 5, "confidence": "low" },
+      "death": { "row": 13, "from": 130, "to": 133, "frames": 4, "confidence": "low" }
+    },
+    "special": {
+      "special-1": { "row": 14, "from": 140, "to": 143, "frames": 4, "confidence": "low" },
+      "special-2": { "row": 15, "from": 150, "to": 156, "frames": 7, "confidence": "low" },
+      "special-3": { "row": 16, "from": 160, "to": 167, "frames": 8, "confidence": "low" }
+    }
+  },
+  "notes": [
+    "Rows 0-6 are unarmed animations - HIGH confidence on frame counts",
+    "Rows 7-13 are armed (sword) variants - MEDIUM confidence, use debug scene to verify",
+    "Rows 14-16 are special attacks with effects - LOW confidence",
+    "Only unarmed anims are wired into the game currently",
+    "No idle-up or idle-side exists - only front and side directions"
+  ]
+}
