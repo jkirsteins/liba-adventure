@@ -281,6 +281,18 @@ k.scene('debug', () => {
 // ==============================================
 
 k.scene('game', () => {
+  // -- Score tracking --
+  let score = 0;
+
+  // -- Score display in the top-left corner --
+  const scoreText = k.add([
+    k.text('Score: 0', { size: 20 }),
+    k.pos(12, 60),
+    k.color(255, 255, 255),
+    k.fixed(),
+    k.z(100),
+  ]);
+
   // -- Title text at the top --
   k.add([
     k.text("Liba's Adventure", { size: 28 }),
