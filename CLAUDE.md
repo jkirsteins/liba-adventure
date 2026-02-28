@@ -18,6 +18,10 @@ A top-down adventure game where an innocent person is framed and sent to prison,
 - **Keep the file structure flat.** Game code goes in `src/`. Avoid deeply nested directories.
 - **ESLint and Prettier are set up.** Run `npm run lint:fix` and `npm run format` before suggesting commits.
 
+## Kaplay Gotchas
+
+- **Scene callbacks must be synchronous.** `k.scene('name', async () => { ... })` does NOT work - game objects added after an `await` silently fail to appear. If you need async data (like fetching a JSON file), fetch it _before_ calling `k.go()` and pass the data as a scene parameter: `k.go('name', data)`.
+
 ## Tech Stack
 
 - **Game engine:** Kaplay v3001.0.19 (https://kaplayjs.com/)

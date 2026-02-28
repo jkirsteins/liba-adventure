@@ -89,6 +89,24 @@ k.loadSprite('goddess', 'sprites/characters/goddess-npc.png', {
   },
 });
 
+// Castle tiles - 26 cols x 16 rows, 16x16px per tile
+k.loadSprite('castle-tiles', 'sprites/tiles/castle.png', {
+  sliceX: 26,
+  sliceY: 16,
+});
+
+// Tavern NPCs - 40 cols x 16 rows, 16x16px per frame
+k.loadSprite('tavern-npcs', 'sprites/characters/tavern-npcs.png', {
+  sliceX: 40,
+  sliceY: 16,
+});
+
+// House furniture tiles - 15 cols x 13 rows, 32x32px per tile
+k.loadSprite('furniture-tiles', 'sprites/tiles/furniture.png', {
+  sliceX: 15,
+  sliceY: 13,
+});
+
 // ==============================================
 // Debug scene - step through sprite frames one by one
 // Keys: Left/Right = step frame, Up/Down = jump row,
@@ -270,9 +288,9 @@ k.scene('debug', () => {
     }
   });
 
-  // G key goes to the game scene
+  // G key goes to the prison scene (the game starts there)
   k.onKeyPress('g', () => {
-    k.go('game');
+    goToPrison();
   });
 });
 
@@ -282,7 +300,65 @@ k.scene('debug', () => {
 
 k.scene('game', () => {
   // -- Score tracking --
-  let score = 0;
+  const score = 0;
+
+  // -- Player health system --
+  const maxHealth = 100;
+  let playerHealth = maxHealth;
+
+  // Invulnerability flag - prevents taking damage too fast from sustained contact
+  let invulnerable = false;
+
+  // Reduce the player's health by the given amount, clamping at 0
+  function takeDamage(amount) {
+    playerHealth = Math.max(0, playerHealth - amount);
+    updateHealthBar();
+  }
+
+  // -- Health bar UI in the top-left corner --
+  // Background (dark bar that shows max width)
+  const healthBarBg = k.add([
+    k.rect(104, 14),
+    k.pos(10, 10),
+    k.color(40, 40, 40),
+    k.fixed(),
+    k.z(100),
+  ]);
+
+  // The colored health bar that shrinks as health decreases
+  const healthBar = k.add([
+    k.rect(100, 10),
+    k.pos(12, 12),
+    k.color(0, 200, 0),
+    k.fixed(),
+    k.z(101),
+  ]);
+
+  // Numeric health label next to the bar
+  const healthLabel = k.add([
+    k.text('100/100', { size: 14 }),
+    k.pos(120, 10),
+    k.color(255, 255, 255),
+    k.fixed(),
+    k.z(100),
+  ]);
+
+  // Update the health bar width and color based on current health
+  function updateHealthBar() {
+    const healthPercent = playerHealth / maxHealth;
+    healthBar.width = 100 * healthPercent;
+
+    // Green when above 50%, yellow 25-50%, red below 25%
+    if (healthPercent > 0.5) {
+      healthBar.color = k.Color.fromHex('#00cc00');
+    } else if (healthPercent > 0.25) {
+      healthBar.color = k.Color.fromHex('#cccc00');
+    } else {
+      healthBar.color = k.Color.fromHex('#cc0000');
+    }
+
+    healthLabel.text = `${playerHealth}/${maxHealth}`;
+  }
 
   // -- Score display in the top-left corner --
   const scoreText = k.add([
@@ -474,6 +550,18 @@ k.scene('game', () => {
 
   // -- What happens when the player touches the slime --
   player.onCollide('enemy', () => {
+    // Skip damage if the player is still invulnerable from a recent hit
+    if (invulnerable) return;
+
+    // Deal damage and start the invulnerability window
+    takeDamage(10);
+    invulnerable = true;
+
+    // After 1 second, allow taking damage again
+    k.wait(1, () => {
+      invulnerable = false;
+    });
+
     // Flash the screen red briefly
     k.flash(k.Color.fromHex('#ff000044'));
 
@@ -504,6 +592,79 @@ k.scene('game', () => {
   });
 });
 
+// ==============================================
+// Prison scene - rendered from LDtk level data
+// ==============================================
+
+// Pre-load LDtk data and then enter the prison scene
+import { preloadLdtk, renderLdtkLevel } from './ldtk-loader.js';
+
+// Integer zoom steps for pixel-perfect scaling
+const ZOOM_STEPS = [1, 2, 3, 4, 5, 6];
+const DEFAULT_ZOOM = 2;
+
+k.scene('prison', (ldtkData) => {
+  // Render the level at (0, 0) - camera handles centering
+  const { level } = renderLdtkLevel(
+    k,
+    ldtkData,
+    {
+      3: 'castle-tiles', // Castle_Tiles (16px grid)
+      10: 'furniture-tiles', // House furniture (32px grid)
+      14: 'tavern-npcs', // Tavern NPCs (16px grid)
+    },
+    {
+      // The Hero entity uses the warrior sprite at natural size.
+      // The 80x64 frame has padding so scale(1) looks right.
+      Hero: (entity) => {
+        k.add([
+          k.sprite('warrior', { anim: 'idle-down' }),
+          k.pos(entity.px[0], entity.px[1]),
+          k.anchor('bot'),
+          k.scale(1),
+          k.z(10),
+        ]);
+      },
+    },
+  );
+
+  // Center camera on the level and set default 2x zoom
+  let zoomIdx = ZOOM_STEPS.indexOf(DEFAULT_ZOOM);
+  k.setCamPos(level.pxWid / 2, level.pxHei / 2);
+  k.setCamScale(ZOOM_STEPS[zoomIdx]);
+
+  // +/= key zooms in, - key zooms out (integer steps only)
+  k.onKeyPress('=', () => {
+    if (zoomIdx < ZOOM_STEPS.length - 1) {
+      zoomIdx++;
+      k.setCamScale(ZOOM_STEPS[zoomIdx]);
+    }
+  });
+  k.onKeyPress('-', () => {
+    if (zoomIdx > 0) {
+      zoomIdx--;
+      k.setCamScale(ZOOM_STEPS[zoomIdx]);
+    }
+  });
+
+  // Scene label (fixed so it doesn't move with camera)
+  k.add([
+    k.text('Prison Cell', { size: 16 }),
+    k.pos(k.width() / 2, 16),
+    k.anchor('center'),
+    k.color(k.Color.fromHex('#ffcc00')),
+    k.fixed(),
+    k.z(100),
+  ]);
+});
+
+// Helper: fetch LDtk data then go to the prison scene
+function goToPrison() {
+  preloadLdtk('prison.ldtk').then((data) => {
+    k.go('prison', data);
+  });
+}
+
 // -- Start on the debug scene so we can inspect sprites first --
-// Press G to switch to the game scene
+// Press G to switch to the prison scene
 k.go('debug');
