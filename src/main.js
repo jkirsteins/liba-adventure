@@ -102,10 +102,44 @@ const CHARACTER_CONFIGS = [
       run: { from: 6, to: 11, loop: true, speed: 10 },
     },
   },
+  // Tavern NPCs - loaded via loadSpriteAtlas, so skipLoad prevents double-loading.
+  // 64x64 frames; character art fills ~48px vertically (top 16px is padding).
+  {
+    key: 'bard',
+    label: 'Bard',
+    skipLoad: true,
+    frameW: 64,
+    frameH: 64,
+    heightCm: 48, // character body fills ~48 of the 64px frame
+    facingRight: true,
+    anims: { idle: { from: 0, to: 4, loop: true, speed: 6 } },
+  },
+  {
+    key: 'hunter',
+    label: 'Hunter',
+    skipLoad: true,
+    frameW: 64,
+    frameH: 64,
+    heightCm: 48, // character body fills ~48 of the 64px frame
+    facingRight: false,
+    anims: { idle: { from: 0, to: 4, loop: true, speed: 6 } },
+  },
+  {
+    key: 'drunkard',
+    label: 'Drunkard',
+    skipLoad: true,
+    frameW: 64,
+    frameH: 64,
+    heightCm: 48, // character body fills ~48 of the 64px frame
+    facingRight: true,
+    anims: { idle: { from: 0, to: 4, loop: true, speed: 6 } },
+  },
 ];
 
 // Load all debug-viewable characters from config
+// (skip atlas-loaded sprites - they were already loaded via loadSpriteAtlas)
 CHARACTER_CONFIGS.forEach((cfg) => {
+  if (cfg.skipLoad) return;
   k.loadSprite(cfg.key, cfg.path, {
     sliceX: cfg.sliceX,
     sliceY: cfg.sliceY,
@@ -144,6 +178,39 @@ k.loadSprite('castle-tiles', 'sprites/tiles/castle.png', {
 k.loadSprite('tavern-npcs', 'sprites/characters/tavern-npcs.png', {
   sliceX: 40,
   sliceY: 16,
+});
+
+// Animated tavern NPC characters (from the same sheet, atlas-sliced).
+// Each character row is 5 frames in 64x64 cells (320x64 region).
+// The 32x48 art sits in the bottom-right of each cell, so frame = 64x64 with padding.
+k.loadSpriteAtlas('sprites/characters/tavern-npcs.png', {
+  bard: {
+    x: 0,
+    y: 0,
+    width: 320,
+    height: 64,
+    sliceX: 5,
+    sliceY: 1,
+    anims: { idle: { from: 0, to: 4, loop: true, speed: 6 } },
+  },
+  hunter: {
+    x: 0,
+    y: 64,
+    width: 320,
+    height: 64,
+    sliceX: 5,
+    sliceY: 1,
+    anims: { idle: { from: 0, to: 4, loop: true, speed: 6 } },
+  },
+  drunkard: {
+    x: 0,
+    y: 128,
+    width: 320,
+    height: 64,
+    sliceX: 5,
+    sliceY: 1,
+    anims: { idle: { from: 0, to: 4, loop: true, speed: 6 } },
+  },
 });
 
 // House furniture tiles - 15 cols x 13 rows, 32x32px per tile
@@ -633,32 +700,14 @@ k.scene('prison', (ldtkData) => {
         ]);
       },
 
-      // The Drunk NPC - renders the tavern-npcs multi-tile sprite.
-      // tileRect {x:16, y:144, w:32, h:48} in a 16px grid, 40-col sheet.
+      // The Drunk NPC - uses the animated drunkard sprite from the atlas
       Drunk: (entity) => {
-        const tile = entity.__tile;
-        const gridSize = 16;
-        const cols = 40;
-        const pivot = entity.__pivot;
-        const topX = entity.px[0] - pivot[0] * entity.width;
-        const topY = entity.px[1] - pivot[1] * entity.height;
-        const fitScale = Math.min(entity.width / tile.w, entity.height / tile.h);
-        const tilesW = tile.w / gridSize;
-        const tilesH = tile.h / gridSize;
-        const startCol = tile.x / gridSize;
-        const startRow = tile.y / gridSize;
-
-        for (let row = 0; row < tilesH; row++) {
-          for (let col = 0; col < tilesW; col++) {
-            const frame = (startRow + row) * cols + (startCol + col);
-            k.add([
-              k.sprite('tavern-npcs', { frame }),
-              k.pos(topX + col * gridSize * fitScale, topY + row * gridSize * fitScale),
-              k.scale(fitScale),
-              k.z(10),
-            ]);
-          }
-        }
+        k.add([
+          k.sprite('drunkard', { anim: 'idle' }),
+          k.pos(entity.px[0], entity.px[1]),
+          k.anchor('bot'),
+          k.z(10),
+        ]);
       },
     },
   );
