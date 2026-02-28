@@ -604,6 +604,7 @@ k.scene('game', () => {
 
 // Pre-load LDtk data and then enter the prison scene
 import { preloadLdtk, renderLdtkLevel } from './ldtk-loader.js';
+import { startDialogue, PRISON_DRUNK_DIALOGUE } from './dialogue.js';
 
 // Integer zoom steps for pixel-perfect scaling
 const ZOOM_STEPS = [1, 2, 3, 4, 5, 6];
@@ -631,8 +632,44 @@ k.scene('prison', (ldtkData) => {
           k.z(10),
         ]);
       },
+
+      // The Drunk NPC - renders the tavern-npcs multi-tile sprite.
+      // tileRect {x:16, y:144, w:32, h:48} in a 16px grid, 40-col sheet.
+      Drunk: (entity) => {
+        const tile = entity.__tile;
+        const gridSize = 16;
+        const cols = 40;
+        const pivot = entity.__pivot;
+        const topX = entity.px[0] - pivot[0] * entity.width;
+        const topY = entity.px[1] - pivot[1] * entity.height;
+        const fitScale = Math.min(entity.width / tile.w, entity.height / tile.h);
+        const tilesW = tile.w / gridSize;
+        const tilesH = tile.h / gridSize;
+        const startCol = tile.x / gridSize;
+        const startRow = tile.y / gridSize;
+
+        for (let row = 0; row < tilesH; row++) {
+          for (let col = 0; col < tilesW; col++) {
+            const frame = (startRow + row) * cols + (startCol + col);
+            k.add([
+              k.sprite('tavern-npcs', { frame }),
+              k.pos(topX + col * gridSize * fitScale, topY + row * gridSize * fitScale),
+              k.scale(fitScale),
+              k.z(10),
+            ]);
+          }
+        }
+      },
     },
   );
+
+  // After a brief pause so the player can see the prison cell,
+  // start the drunk cellmate's dialogue
+  k.wait(1.5, () => {
+    startDialogue(k, PRISON_DRUNK_DIALOGUE, () => {
+      // Dialogue finished - nothing to do for now
+    });
+  });
 
   // Center camera on the level and set default 2x zoom
   let zoomIdx = ZOOM_STEPS.indexOf(DEFAULT_ZOOM);
