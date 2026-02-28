@@ -18,32 +18,32 @@ The 800x600 game framebuffer is upscaled to the screen via WebGL texture samplin
 
 ## Final Acceptance Criteria
 
-- [ ] Build succeeds - Verify: `cd /Users/janis.kirsteins/Projects/LibaGame1 && npm run build` - Expected: exit code 0
-- [ ] Lint passes - Verify: `cd /Users/janis.kirsteins/Projects/LibaGame1 && npm run lint -- --max-warnings 0` - Expected: exit code 0
-- [ ] Format correct - Verify: `cd /Users/janis.kirsteins/Projects/LibaGame1 && npm run format:check` - Expected: exit code 0
-- [ ] Uses stretch not letterbox - Verify: `grep -q 'stretch: true' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && ! grep -q 'letterbox: true' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && echo PASS || echo FAIL` - Expected: PASS
-- [ ] Uses root container - Verify: `grep -q 'root:' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && echo PASS || echo FAIL` - Expected: PASS
-- [ ] Container div in HTML - Verify: `grep -q 'id="game-container"' /Users/janis.kirsteins/Projects/LibaGame1/index.html && echo PASS || echo FAIL` - Expected: PASS
-- [ ] Black background - Verify: `grep -q '#000' /Users/janis.kirsteins/Projects/LibaGame1/index.html && echo PASS || echo FAIL` - Expected: PASS
-- [ ] Integer scale logic - Verify: `grep -q 'Math.floor' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && grep -q 'Math.min' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && echo PASS || echo FAIL` - Expected: PASS
+- [x] Build succeeds - Verify: `cd /Users/janis.kirsteins/Projects/LibaGame1 && npm run build` - Expected: exit code 0
+- [x] Lint passes - Verify: `cd /Users/janis.kirsteins/Projects/LibaGame1 && npm run lint -- --max-warnings 0` - Expected: exit code 0
+- [x] Format correct - Verify: `cd /Users/janis.kirsteins/Projects/LibaGame1 && npm run format:check` - Expected: exit code 0
+- [x] Uses stretch not letterbox - Verify: `grep -q 'stretch: true' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && ! grep -q 'letterbox: true' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && echo PASS || echo FAIL` - Expected: PASS
+- [x] Uses root container - Verify: `grep -q 'root:' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && echo PASS || echo FAIL` - Expected: PASS
+- [x] Container div in HTML - Verify: `grep -q 'id="game-container"' /Users/janis.kirsteins/Projects/LibaGame1/index.html && echo PASS || echo FAIL` - Expected: PASS
+- [x] Black background - Verify: `grep -q '#000' /Users/janis.kirsteins/Projects/LibaGame1/index.html && echo PASS || echo FAIL` - Expected: PASS
+- [x] Integer scale logic - Verify: `grep -q 'Math.floor' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && grep -q 'Math.min' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && echo PASS || echo FAIL` - Expected: PASS
 
 ## Milestones
 
-### M1: Update index.html with container div, black background, and flexbox centering
+### M1: Update index.html with container div, black background, and flexbox centering [DONE]
 
 - **Description:** Replace the current body/CSS in `index.html`: (1) Change body background from `#1a1a2e` to `#000` (black). (2) Add `display: flex; align-items: center; justify-content: center` to `html, body`. (3) Add `<div id="game-container"></div>` before the script tag. (4) Remove the `canvas { display: block; }` rule (Kaplay manages canvas CSS in responsive mode).
 - **Verify:** `grep -q 'id="game-container"' /Users/janis.kirsteins/Projects/LibaGame1/index.html && grep -q '#000' /Users/janis.kirsteins/Projects/LibaGame1/index.html && grep -Eq 'display:\s*flex|display: flex' /Users/janis.kirsteins/Projects/LibaGame1/index.html && ! grep -q 'display: block' /Users/janis.kirsteins/Projects/LibaGame1/index.html && echo PASS || echo FAIL` - Expected: PASS
 - **Depends on:** none
 - **Files likely touched:** `index.html`
 
-### M2: Add integer-scale container sizing and switch kaplay init to stretch mode
+### M2: Add integer-scale container sizing and switch kaplay init to stretch mode [DONE]
 
 - **Description:** In `src/main.js`, before the kaplay init: (1) Define `GAME_W = 800` and `GAME_H = 600` constants. (2) Get the container element via `document.getElementById('game-container')`. (3) Add a `resizeGameContainer()` function that computes `N = Math.max(1, Math.floor(Math.min(innerWidth / GAME_W, innerHeight / GAME_H)))` and sets `container.style.width = GAME_W * N + 'px'` and `container.style.height = GAME_H * N + 'px'`. (4) Call `resizeGameContainer()` immediately (before kaplay, so the container has a size when Kaplay reads `parentElement.offsetWidth`). (5) Add `window.addEventListener('resize', resizeGameContainer)`. Then change the kaplay init: remove `letterbox: true`, add `stretch: true`, add `root: container`, replace hardcoded `width: 800, height: 600` with `GAME_W, GAME_H`.
 - **Verify:** `grep -q 'stretch: true' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && grep -q 'root:' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && ! grep -q 'letterbox: true' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && grep -q 'Math.floor' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && grep -q 'Math.min' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && grep -Eq "style\.(width|height)" /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && grep -q 'addEventListener.*resize' /Users/janis.kirsteins/Projects/LibaGame1/src/main.js && echo PASS || echo FAIL` - Expected: PASS
 - **Depends on:** M1
 - **Files likely touched:** `src/main.js`
 
-### M3: Lint, format, and build verification
+### M3: Lint, format, and build verification [DONE]
 
 - **Description:** Run `npm run lint:fix` and `npm run format` to auto-fix any code style issues. Then verify `npm run build` succeeds. Fix any remaining issues.
 - **Verify:** `cd /Users/janis.kirsteins/Projects/LibaGame1 && npm run lint -- --max-warnings 0 && npm run format:check && npm run build` - Expected: all three commands exit 0

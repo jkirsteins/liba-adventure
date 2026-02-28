@@ -8,20 +8,44 @@
 
 import kaplay from 'kaplay';
 
+// --- Pixel-perfect integer scaling ---
+// Size the container to an exact integer multiple of the game resolution
+// so every game pixel maps to exactly NxN screen pixels.
+const GAME_W = 800;
+const GAME_H = 600;
+const container = document.getElementById('game-container');
+
+function resizeGameContainer() {
+  const intScale = Math.floor(Math.min(innerWidth / GAME_W, innerHeight / GAME_H));
+  if (intScale >= 1) {
+    // Integer scaling: every game pixel = exactly NxN screen pixels
+    container.style.width = GAME_W * intScale + 'px';
+    container.style.height = GAME_H * intScale + 'px';
+  } else {
+    // Window smaller than game resolution: fit while keeping aspect ratio
+    const fitScale = Math.min(innerWidth / GAME_W, innerHeight / GAME_H);
+    container.style.width = Math.floor(GAME_W * fitScale) + 'px';
+    container.style.height = Math.floor(GAME_H * fitScale) + 'px';
+  }
+}
+
+// Must be called before kaplay() so the container has a size for Kaplay to read
+resizeGameContainer();
+window.addEventListener('resize', resizeGameContainer);
+
 // --- Create the game engine ---
 const k = kaplay({
-  // How big the game window is
-  width: 800,
-  height: 600,
+  root: container,
+  width: GAME_W,
+  height: GAME_H,
 
-  // The background color (dark blue-green, like a forest at night)
-  background: [26, 42, 46],
+  background: [19, 19, 24],
 
   // Make the pixels crisp (no blurring) - important for pixel art!
   crisp: true,
 
-  // Scale the canvas to fill the browser window
-  letterbox: true,
+  // Stretch the canvas to fill the container (which is integer-scaled)
+  stretch: true,
 
   // Pixel art games look best with nearest-neighbor scaling
   texFilter: 'nearest',
@@ -958,7 +982,7 @@ k.scene('game', () => {
 // ==============================================
 
 // Pre-load LDtk data and then enter the prison scene
-import { preloadLdtk, renderLdtkLevel } from './ldtk-loader.js';
+import { getEntityField, preloadLdtk, renderLdtkLevel } from './ldtk-loader.js';
 import { startDialogue, PRISON_DRUNK_DIALOGUE } from './dialogue.js';
 
 // Integer zoom steps for pixel-perfect scaling
@@ -1020,8 +1044,6 @@ k.scene('prison', (ldtkData) => {
     dialogueActive = true;
     startDialogue(k, PRISON_DRUNK_DIALOGUE, () => {
       dialogueActive = false;
-      // Return to idle when dialogue ends so the player isn't stuck mid-walk
-      if (player) player.play('idle');
     });
   });
 
@@ -1034,23 +1056,24 @@ k.scene('prison', (ldtkData) => {
   k.onUpdate(() => {
     if (!player) return;
 
-    // Skip all movement input while a dialogue box is on screen
-    if (dialogueActive) return;
-
     const wasMoving = moving;
     moving = false;
 
-    if (k.isKeyDown('left')) {
-      player.move(-SPEED, 0);
-      player.flipX = false; // warrior faces left naturally - no flip needed
-      moving = true;
-    } else if (k.isKeyDown('right')) {
-      player.move(SPEED, 0);
-      player.flipX = true; // flip left-facing warrior to face right
-      moving = true;
+    // Only read input when no dialogue is active
+    if (!dialogueActive) {
+      if (k.isKeyDown('left')) {
+        player.move(-SPEED, 0);
+        player.flipX = false; // warrior faces left naturally - no flip needed
+        moving = true;
+      } else if (k.isKeyDown('right')) {
+        player.move(SPEED, 0);
+        player.flipX = true; // flip left-facing warrior to face right
+        moving = true;
+      }
     }
 
-    // Switch between walk and idle only when the state changes
+    // Animation state transitions always run - ensures the player
+    // stops walking when dialogue starts, without special-case code
     if (moving && !wasMoving) {
       player.play('walk');
     } else if (!moving && wasMoving) {
@@ -1127,13 +1150,13 @@ k.scene('prison', (ldtkData) => {
     k.z(100),
   ]);
 
-  // Scene label (fixed so it doesn't move with camera)
+  // Scene label from LDtk "title" field, falls back to level identifier
+  const levelName = getEntityField(level, 'title') || level.identifier.replace(/_/g, ' ');
   k.add([
-    k.text('Prison Cell', { size: 16 }),
-    k.pos(k.width() / 2, 16),
-    k.anchor('center'),
+    k.text(levelName, { size: 16 }),
+    k.pos(level.pxWid / 2, -4),
+    k.anchor('bot'),
     k.color(k.Color.fromHex('#ffcc00')),
-    k.fixed(),
     k.z(100),
   ]);
 });
