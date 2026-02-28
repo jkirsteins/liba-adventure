@@ -29,57 +29,102 @@ const k = kaplay({
 
 // --- Load all our sprites ---
 
-// The warrior character - 10 columns x 17 rows, 80x64px per frame
-// Source: GandalfHardcore FREE Warrior
-k.loadSprite('warrior', 'sprites/characters/warrior.png', {
-  sliceX: 10,
-  sliceY: 17,
-  anims: {
-    // -- Unarmed animations (rows 0-6) --
-    // Row 0: Idle facing down (5 frames)
-    'idle-down': { from: 0, to: 4, loop: true, speed: 6 },
-    // Row 1: Run facing down (8 frames)
-    'run-down': { from: 10, to: 17, loop: true, speed: 10 },
-    // Row 2: Run facing side (8 frames)
-    'run-side': { from: 20, to: 27, loop: true, speed: 10 },
-    // Row 3: Jump (4 frames)
-    jump: { from: 30, to: 33, loop: false, speed: 8 },
-    // Row 4: Emote / cast (4 frames)
-    emote: { from: 40, to: 43, loop: true, speed: 6 },
-    // Row 5: Attack unarmed (4 frames)
-    attack: { from: 50, to: 53, loop: false, speed: 10 },
-    // Row 6: Death unarmed (4 frames)
-    death: { from: 60, to: 63, loop: false, speed: 6 },
+// Characters available in the debug animation viewer.
+// Each entry drives both the loadSprite call and the viewer UI.
+const CHARACTER_CONFIGS = [
+  {
+    key: 'warrior',
+    label: 'Warrior',
+    path: 'sprites/characters/warrior.png',
+    sliceX: 10,
+    sliceY: 17,
+    frameW: 80,
+    frameH: 64,
+    heightCm: 52, // character body fills ~52 of the 64px frame (rest is breathing room)
+    facingRight: false, // sprite sheet faces left
+    anims: {
+      // Row 0: Idle (5 frames)
+      idle: { from: 0, to: 4, loop: true, speed: 6 },
+      // Row 1: Walk (8 frames)
+      walk: { from: 10, to: 17, loop: true, speed: 10 },
+      // Row 2: Run sideways - flipped for left/right direction (8 frames)
+      run: { from: 20, to: 27, loop: true, speed: 10 },
+    },
   },
+  {
+    key: 'scribe',
+    label: 'Scribe',
+    path: 'sprites/characters/scribe.png',
+    sliceX: 8,
+    sliceY: 2,
+    frameW: 64,
+    frameH: 64,
+    heightCm: 52,
+    facingRight: false, // sprite sheet faces left
+    anims: {
+      // Row 0: Idle (frames 0-4, 5 frames)
+      idle: { from: 0, to: 4, loop: true, speed: 6 },
+      // Row 1: Walk cycle (frames 8-15, 8 frames)
+      walk: { from: 8, to: 15, loop: true, speed: 10 },
+    },
+  },
+  {
+    key: 'inquisition',
+    label: 'Inquisition',
+    path: 'sprites/characters/inquisition.png',
+    sliceX: 8,
+    sliceY: 2,
+    frameW: 64,
+    frameH: 64,
+    heightCm: 52,
+    facingRight: false, // sprite sheet faces left
+    anims: {
+      // Row 0: Idle (frames 0-4, 5 frames)
+      idle: { from: 0, to: 4, loop: true, speed: 6 },
+      // Row 1: Walk cycle (frames 8-15, 8 frames)
+      walk: { from: 8, to: 15, loop: true, speed: 10 },
+    },
+  },
+  {
+    key: 'fox',
+    label: 'Fox',
+    path: 'sprites/pets/fox.png',
+    sliceX: 6,
+    sliceY: 2,
+    frameW: 32,
+    frameH: 32,
+    heightCm: 20, // fox character is ~20px tall within the 32px frame
+    facingRight: true, // sprite sheet faces right
+    anims: {
+      // Row 0: Idle (frames 0-4, 5 frames)
+      idle: { from: 0, to: 4, loop: true, speed: 6 },
+      // Row 1: Run cycle (frames 6-11, 6 frames)
+      run: { from: 6, to: 11, loop: true, speed: 10 },
+    },
+  },
+];
+
+// Load all debug-viewable characters from config
+CHARACTER_CONFIGS.forEach((cfg) => {
+  k.loadSprite(cfg.key, cfg.path, {
+    sliceX: cfg.sliceX,
+    sliceY: cfg.sliceY,
+    anims: cfg.anims,
+  });
 });
 
-// The green slime enemy (8 columns, 3 rows)
-// Frames are packed sequentially (not one animation per row!)
+// The green slime enemy (8 columns, 3 rows) - not in debug viewer
 k.loadSprite('slime', 'sprites/enemies/slime-green.png', {
   sliceX: 8,
   sliceY: 3,
   anims: {
-    // Idle bounce (frames 0-4, crosses no row boundary)
     idle: { from: 0, to: 4, loop: true, speed: 6 },
-    // Move (frames 5-12, crosses row 0 into row 1)
     move: { from: 5, to: 12, loop: true, speed: 8 },
-    // Death (frames 13-18, stays in rows 1-2)
     death: { from: 13, to: 18, loop: false, speed: 8 },
   },
 });
 
-// The cute fox pet (6 columns, 2 rows)
-k.loadSprite('fox', 'sprites/pets/fox.png', {
-  sliceX: 6,
-  sliceY: 2,
-  anims: {
-    walk: { from: 0, to: 5, loop: true, speed: 8 },
-    idle: { from: 6, to: 11, loop: true, speed: 6 },
-  },
-});
-
-// The Goddess NPC (13 columns, 1 row)
-// Idle = frames 0-4, Walk = frames 5-12
+// The Goddess NPC (13 columns, 1 row) - not in debug viewer
 k.loadSprite('goddess', 'sprites/characters/goddess-npc.png', {
   sliceX: 13,
   sliceY: 1,
@@ -108,41 +153,66 @@ k.loadSprite('furniture-tiles', 'sprites/tiles/furniture.png', {
 });
 
 // ==============================================
-// Debug scene - step through sprite frames one by one
-// Keys: Left/Right = step frame, Up/Down = jump row,
-//       1-4 = switch sprite, Space = auto-play, G = game
+// Debug scene - animation viewer
+// Keys: Left/Right = switch character, Up/Down = switch anim, G = game
 // ==============================================
 
-// All the sprites we can inspect, with their grid info
-const DEBUG_SPRITES = [
-  { name: 'warrior', cols: 10, rows: 17, frameW: 80, frameH: 64 },
-  { name: 'slime', cols: 8, rows: 3, frameW: 32, frameH: 32 },
-  { name: 'fox', cols: 6, rows: 2, frameW: 32, frameH: 32 },
-  { name: 'goddess', cols: 13, rows: 1, frameW: 64, frameH: 64 },
-];
-
 k.scene('debug', () => {
-  let spriteIdx = 0;
-  let prevSpriteIdx = -1; // track when we need to swap the sprite component
-  let frame = 0;
-  let autoPlay = false;
-  let autoTimer = 0;
-  const AUTO_SPEED = 0.25; // seconds per frame when auto-playing
+  let charIdx = 0;
+  let animIdx = 0;
 
-  // The big sprite preview in the center
-  const preview = k.add([
-    k.sprite(DEBUG_SPRITES[0].name),
-    k.pos(k.width() / 2, k.height() / 2 - 30),
+  // How many screen pixels equal 1 in-game cm.
+  // Tune this to control the overall zoom level of the viewer.
+  const VIEWER_PX_PER_CM = 5;
+
+  // Compute the integer display scale for a character so it renders at its declared
+  // heightCm, regardless of how large or small the sprite sheet frames are.
+  // Using Math.round keeps it pixel-perfect (no fractional pixel stretching).
+  function displayScale(cfg) {
+    return Math.round((cfg.heightCm * VIEWER_PX_PER_CM) / cfg.frameH);
+  }
+
+  // Help text at the top
+  k.add([
+    k.text('Q/E: character  |  Up/Down: anim  |  Left/Right: flip  |  G: game', {
+      size: 14,
+    }),
+    k.pos(k.width() / 2, 18),
     k.anchor('center'),
-    k.scale(4),
+    k.color(180, 180, 180),
+    k.z(100),
+  ]);
+
+  // Character name display with < > arrows
+  const charLabel = k.add([
+    k.text('', { size: 20 }),
+    k.pos(k.width() / 2, 52),
+    k.anchor('center'),
+    k.color(255, 220, 100),
+    k.z(100),
+  ]);
+
+  // Preview sprite - starts with first character's first anim
+  const firstCfg = CHARACTER_CONFIGS[0];
+  const firstAnimName = Object.keys(firstCfg.anims)[0];
+  const previewX = k.width() / 2 - 80; // shift left to leave room for anim list
+  const previewY = k.height() / 2 + 20;
+
+  const preview = k.add([
+    k.sprite(firstCfg.key, { anim: firstAnimName }),
+    k.pos(previewX, previewY),
+    k.anchor('center'),
+    k.scale(displayScale(firstCfg)),
     k.z(10),
   ]);
-  prevSpriteIdx = 0;
 
-  // Colored border around the sprite to show frame boundary
+  // Yellow border that resizes to match current frame dimensions
   const border = k.add([
-    k.rect(100 * 4 + 4, 64 * 4 + 4),
-    k.pos(k.width() / 2, k.height() / 2 - 30),
+    k.rect(
+      firstCfg.frameW * displayScale(firstCfg) + 4,
+      firstCfg.frameH * displayScale(firstCfg) + 4,
+    ),
+    k.pos(previewX, previewY),
     k.anchor('center'),
     k.outline(2, k.Color.fromHex('#ffcc00')),
     k.color(0, 0, 0),
@@ -150,145 +220,100 @@ k.scene('debug', () => {
     k.z(5),
   ]);
 
-  // Info text overlay
-  const infoText = k.add([
-    k.text('', { size: 16 }),
-    k.pos(k.width() / 2, k.height() - 100),
-    k.anchor('center'),
-    k.color(255, 255, 255),
-    k.z(100),
-  ]);
+  // Animation list labels - we'll recreate them on character switch
+  let animLabels = [];
 
-  // Help text at the top
-  k.add([
-    k.text('SPRITE DEBUG - arrows: step | 1-4: sprite | space: auto | G: game', {
-      size: 14,
-    }),
-    k.pos(k.width() / 2, 20),
-    k.anchor('center'),
-    k.color(180, 180, 180),
-    k.z(100),
-  ]);
+  // Build the anim list UI on the right side of the preview
+  function buildAnimList(cfg, selectedIdx) {
+    // Remove old labels
+    animLabels.forEach((lbl) => lbl.destroy());
+    animLabels = [];
 
-  // Find which animation name (if any) this frame belongs to
-  function getAnimName(spriteDef, frameIdx) {
-    // We need to look up the animation definitions we registered
-    const animDefs = {
-      warrior: {
-        'idle-down': [0, 4],
-        'run-down': [10, 17],
-        'run-side': [20, 27],
-        jump: [30, 33],
-        emote: [40, 43],
-        attack: [50, 53],
-        death: [60, 63],
-      },
-      slime: { idle: [0, 4], move: [5, 12], death: [13, 18] },
-      fox: { walk: [0, 5], idle: [6, 11] },
-      goddess: { idle: [0, 4], walk: [5, 12] },
-    };
-    const anims = animDefs[spriteDef.name] || {};
-    for (const [name, [from, to]] of Object.entries(anims)) {
-      if (frameIdx >= from && frameIdx <= to) return name;
-    }
-    return '-';
+    const animNames = Object.keys(cfg.anims);
+    const listX = k.width() / 2 + 80;
+    const listStartY = k.height() / 2 - (animNames.length * 24) / 2;
+
+    animNames.forEach((name, i) => {
+      const isSelected = i === selectedIdx;
+      const lbl = k.add([
+        k.text((isSelected ? '> ' : '  ') + name, { size: 16 }),
+        k.pos(listX, listStartY + i * 24),
+        k.anchor('left'),
+        k.color(isSelected ? k.Color.fromHex('#ffcc00') : k.Color.fromHex('#aaaaaa')),
+        k.z(100),
+      ]);
+      animLabels.push(lbl);
+    });
   }
 
-  // Update the display for the current frame and sprite
-  function refresh() {
-    const info = DEBUG_SPRITES[spriteIdx];
-    const totalFrames = info.cols * info.rows;
+  // Apply the current character and animation to the preview
+  function applySelection() {
+    const cfg = CHARACTER_CONFIGS[charIdx];
+    const animNames = Object.keys(cfg.anims);
 
-    // Clamp frame to valid range
-    if (frame < 0) frame = 0;
-    if (frame >= totalFrames) frame = totalFrames - 1;
+    // Clamp animIdx to valid range for this character
+    if (animIdx >= animNames.length) animIdx = 0;
 
-    const row = Math.floor(frame / info.cols);
-    const col = frame % info.cols;
-    const animName = getAnimName(info, frame);
+    const animName = animNames[animIdx];
 
-    // Only swap the sprite component when switching to a different sprite
-    if (spriteIdx !== prevSpriteIdx) {
-      preview.use(k.sprite(info.name));
-      border.width = info.frameW * 4 + 4;
-      border.height = info.frameH * 4 + 4;
-      prevSpriteIdx = spriteIdx;
-    }
-    preview.frame = frame;
+    const sc = displayScale(cfg);
 
-    // Update info text
-    infoText.text =
-      `${info.name} | frame ${frame}/${totalFrames - 1}` +
-      ` | row ${row} col ${col}` +
-      ` | anim: ${animName}` +
-      ` | ${autoPlay ? 'AUTO' : 'manual'}`;
+    // Swap sprite and restart the selected animation
+    preview.use(k.sprite(cfg.key, { anim: animName }));
+    preview.play(animName, { loop: true }); // always loop in viewer
+    preview.scale = k.vec2(sc);
+    preview.flipX = false; // flipX=false always shows the natural/default facing direction
+
+    // Resize border to match this character's frame size at the new scale
+    border.width = cfg.frameW * sc + 4;
+    border.height = cfg.frameH * sc + 4;
+
+    // Update header label
+    charLabel.text = `< ${cfg.label} >`;
+
+    // Rebuild anim list with new selection
+    buildAnimList(cfg, animIdx);
   }
 
-  refresh();
+  // First render
+  applySelection();
 
-  // Step frame with Left/Right
-  k.onKeyPress('right', () => {
-    frame++;
-    refresh();
+  // Q / E: switch character (wraps around)
+  k.onKeyPress('e', () => {
+    charIdx = (charIdx + 1) % CHARACTER_CONFIGS.length;
+    animIdx = 0;
+    applySelection();
   });
-  k.onKeyPress('left', () => {
-    frame--;
-    refresh();
+  k.onKeyPress('q', () => {
+    charIdx = (charIdx - 1 + CHARACTER_CONFIGS.length) % CHARACTER_CONFIGS.length;
+    animIdx = 0;
+    applySelection();
   });
 
-  // Jump one row with Up/Down
-  k.onKeyPress('up', () => {
-    frame -= DEBUG_SPRITES[spriteIdx].cols;
-    refresh();
-  });
+  // Up/Down: switch animation for current character (wraps around)
   k.onKeyPress('down', () => {
-    frame += DEBUG_SPRITES[spriteIdx].cols;
-    refresh();
+    const len = Object.keys(CHARACTER_CONFIGS[charIdx].anims).length;
+    animIdx = (animIdx + 1) % len;
+    applySelection();
+  });
+  k.onKeyPress('up', () => {
+    const len = Object.keys(CHARACTER_CONFIGS[charIdx].anims).length;
+    animIdx = (animIdx - 1 + len) % len;
+    applySelection();
   });
 
-  // Switch sprites with 1-4
-  k.onKeyPress('1', () => {
-    spriteIdx = 0;
-    frame = 0;
-    refresh();
+  // Left/Right: make the sprite face that direction.
+  // flipX depends on which way the sprite naturally faces in the sheet:
+  //   facing left naturally -> flip to face right, no flip to face left
+  //   facing right naturally -> no flip to face right, flip to face left
+  k.onKeyPress('left', () => {
+    preview.flipX = CHARACTER_CONFIGS[charIdx].facingRight;
   });
-  k.onKeyPress('2', () => {
-    spriteIdx = 1;
-    frame = 0;
-    refresh();
-  });
-  k.onKeyPress('3', () => {
-    spriteIdx = 2;
-    frame = 0;
-    refresh();
-  });
-  k.onKeyPress('4', () => {
-    spriteIdx = 3;
-    frame = 0;
-    refresh();
+  k.onKeyPress('right', () => {
+    preview.flipX = !CHARACTER_CONFIGS[charIdx].facingRight;
   });
 
-  // Toggle auto-play with Space
-  k.onKeyPress('space', () => {
-    autoPlay = !autoPlay;
-    autoTimer = 0;
-    refresh();
-  });
-
-  // Auto-play stepping
-  k.onUpdate(() => {
-    if (!autoPlay) return;
-    autoTimer += k.dt();
-    if (autoTimer >= AUTO_SPEED) {
-      autoTimer -= AUTO_SPEED;
-      frame++;
-      const totalFrames = DEBUG_SPRITES[spriteIdx].cols * DEBUG_SPRITES[spriteIdx].rows;
-      if (frame >= totalFrames) frame = 0;
-      refresh();
-    }
-  });
-
-  // G key goes to the prison scene (the game starts there)
+  // G key goes to the prison scene
   k.onKeyPress('g', () => {
     goToPrison();
   });
@@ -299,8 +324,8 @@ k.scene('debug', () => {
 // ==============================================
 
 k.scene('game', () => {
-  // -- Score tracking --
-  const score = 0;
+  // -- Score tracking (not yet wired up to gameplay) --
+  const _score = 0;
 
   // -- Player health system --
   const maxHealth = 100;
@@ -317,7 +342,7 @@ k.scene('game', () => {
 
   // -- Health bar UI in the top-left corner --
   // Background (dark bar that shows max width)
-  const healthBarBg = k.add([
+  const _healthBarBg = k.add([
     k.rect(104, 14),
     k.pos(10, 10),
     k.color(40, 40, 40),
@@ -361,7 +386,7 @@ k.scene('game', () => {
   }
 
   // -- Score display in the top-left corner --
-  const scoreText = k.add([
+  const _scoreText = k.add([
     k.text('Score: 0', { size: 20 }),
     k.pos(12, 60),
     k.color(255, 255, 255),
@@ -417,7 +442,7 @@ k.scene('game', () => {
 
   // -- The player character (warrior) --
   const player = k.add([
-    k.sprite('warrior', { anim: 'idle-down' }),
+    k.sprite('warrior', { anim: 'idle' }),
     k.pos(k.width() / 2, k.height() / 2),
     k.anchor('center'),
     k.area({ shape: new k.Rect(k.vec2(-12, -12), 24, 24) }),
@@ -430,59 +455,40 @@ k.scene('game', () => {
   // How fast the player moves (pixels per second)
   const SPEED = 150;
 
-  // Keep track of which direction the player is facing
-  let facing = 'down';
-
-  // -- Player movement with arrow keys --
-  // This asset only has front and side views, so:
-  //   Up/Down both use run-down, Left/Right use run-side with flipX
-  //   All idle uses idle-down (the only idle animation available)
+  // Keep track of movement state to avoid replaying the same anim every frame
+  let moving = false;
 
   // How much of the rendered sprite extends from center
   const PLAYER_HALF_W = 40 * 2; // half of 80px frame * scale(2)
   const PLAYER_HALF_H = 32 * 2; // half of 64px frame * scale(2)
 
   k.onUpdate(() => {
-    let moving = false;
+    const wasMoving = moving;
+    moving = false;
 
     if (k.isKeyDown('left')) {
       player.move(-SPEED, 0);
-      if (facing !== 'left') {
-        player.play('run-side');
-        player.flipX = false;
-        facing = 'left';
-      }
+      player.flipX = false; // warrior faces left naturally - no flip needed
       moving = true;
     } else if (k.isKeyDown('right')) {
       player.move(SPEED, 0);
-      if (facing !== 'right') {
-        player.play('run-side');
-        player.flipX = true;
-        facing = 'right';
-      }
+      player.flipX = true; // flip left-facing warrior to face right
       moving = true;
     }
 
     if (k.isKeyDown('up')) {
       player.move(0, -SPEED);
-      if (!moving && facing !== 'up') {
-        player.play('run-down');
-        facing = 'up';
-      }
       moving = true;
     } else if (k.isKeyDown('down')) {
       player.move(0, SPEED);
-      if (!moving && facing !== 'down') {
-        player.play('run-down');
-        facing = 'down';
-      }
       moving = true;
     }
 
-    // When no keys are pressed, always idle with the front-facing animation
-    if (!moving && facing !== 'idle') {
-      player.play('idle-down');
-      facing = 'idle';
+    // Switch between walk and idle only when the state changes
+    if (moving && !wasMoving) {
+      player.play('walk');
+    } else if (!moving && wasMoving) {
+      player.play('idle');
     }
 
     // Keep the player fully inside the screen
@@ -528,7 +534,7 @@ k.scene('game', () => {
 
   // -- The cute fox friend --
   const fox = k.add([
-    k.sprite('fox', { anim: 'walk' }),
+    k.sprite('fox', { anim: 'run' }),
     k.pos(500, 400),
     k.anchor('center'),
     k.scale(2),
@@ -618,7 +624,7 @@ k.scene('prison', (ldtkData) => {
       // The 80x64 frame has padding so scale(1) looks right.
       Hero: (entity) => {
         k.add([
-          k.sprite('warrior', { anim: 'idle-down' }),
+          k.sprite('warrior', { anim: 'idle' }),
           k.pos(entity.px[0], entity.px[1]),
           k.anchor('bot'),
           k.scale(1),

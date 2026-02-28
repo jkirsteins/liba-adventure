@@ -34,11 +34,29 @@ export default [
 
       // --- Helpful warnings ---
       // These are WARNINGS to help you write better code
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }], // Unused variables (ok if starts with _)
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }], // Unused vars/args ok if name starts with _
       'prefer-const': 'warn', // Use const when you never reassign
       'eqeqeq': ['warn', 'always'], // Use === instead of ==
       'no-empty': 'warn', // Don't leave empty {} blocks
       'no-console': 'off', // console.log is fine for learning!
+    },
+  },
+
+  // Prevent accidental top-level side effects in utility/library files.
+  // main.js is the entry point so it's excluded - everything else should
+  // be a pure module that only exports functions.
+  {
+    files: ['src/**/*.js'],
+    ignores: ['src/main.js'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Program > ExpressionStatement',
+          message:
+            'Top-level side effects are not allowed in utility modules. Wrap in a function or export instead.',
+        },
+      ],
     },
   },
 
