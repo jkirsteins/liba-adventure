@@ -13,6 +13,33 @@
 const cache = {};
 
 /**
+ * Look up a custom field value on an LDtk entity.
+ *
+ * LDtk entities can have user-defined fields (added in the Entity
+ * editor). Each field appears in `entity.fieldInstances` with an
+ * `__identifier` (the field name) and `__value` (the value).
+ *
+ * This helper saves you from writing the lookup boilerplate every
+ * time. Returns `undefined` if the entity has no fieldInstances
+ * array or the named field does not exist.
+ *
+ * Convention used in this project: a boolean field called "solid"
+ * marks an entity as impassable. The default entity renderer checks
+ * this automatically and creates a collision body. Custom entity
+ * handlers can call `getEntityField(entity, 'solid')` to do the
+ * same thing themselves.
+ *
+ * @param {object} entity - An LDtk entity instance
+ * @param {string} fieldName - The __identifier of the field to find
+ * @returns {*} The field's __value, or undefined if not found
+ */
+export function getEntityField(entity, fieldName) {
+  if (!entity.fieldInstances) return undefined;
+  const field = entity.fieldInstances.find((f) => f.__identifier === fieldName);
+  return field ? field.__value : undefined;
+}
+
+/**
  * Pre-fetch an LDtk file. Call this before k.go() so the data
  * is ready when the scene runs synchronously.
  */
@@ -102,8 +129,7 @@ export function renderLdtkLevel(k, data, tilesetMap, entityHandlers) {
       const topY = entity.px[1] - pivot[1] * entity.height;
 
       // Check if the entity has a flipX field
-      const flipField = entity.fieldInstances.find((f) => f.__identifier === 'flipX');
-      const flipX = flipField && flipField.__value;
+      const flipX = getEntityField(entity, 'flipX');
 
       // Break the tileRect into individual grid-sized frames
       const tilesW = tile.w / gridSize;
@@ -136,8 +162,77 @@ export function renderLdtkLevel(k, data, tilesetMap, entityHandlers) {
           ]);
         }
       }
+
+      // If the entity is marked solid, add an invisible collision body
+      // covering the full entity bounding box so the player can't walk
+      // through it (e.g. furniture, pillars, locked doors)
+      if (getEntityField(entity, 'solid') === true) {
+        k.add([
+          k.pos(topX, topY),
+          k.rect(entity.width, entity.height),
+          k.area(),
+          k.body({ isStatic: true }),
+          k.opacity(0),
+          'wall',
+        ]);
+      }
     }
   }
 
-  return { level };
+  // Create collision bodies from the IntGrid layer (if present)
+  const walls = createIntGridColliders(k, level);
+
+  return { level, walls };
+}
+
+/**
+ * Create invisible static collision bodies from an LDtk IntGrid layer.
+ *
+ * LDtk IntGrid layers store a flat CSV array of integer values - one per
+ * grid cell, row by row. Any cell with a value >= 1 is treated as a solid
+ * wall. The layer's __gridSize and __cWid fields determine cell dimensions
+ * and row width.
+ *
+ * For level designers: add an IntGrid layer to your LDtk level and paint
+ * cells with value 1 (or higher) wherever you want impassable walls.
+ * Cells with value 0 (or unpainted) are walkable. The layer name and
+ * identifier do not matter - the loader finds the first layer whose
+ * __type is "IntGrid" and whose intGridCsv is non-empty.
+ *
+ * @param {object} k - Kaplay instance
+ * @param {object} level - A single LDtk level object
+ * @returns {object[]} Array of wall game objects (empty if no IntGrid layer)
+ */
+function createIntGridColliders(k, level) {
+  const intGridLayer = level.layerInstances.find(
+    (l) => l.__type === 'IntGrid' && l.intGridCsv && l.intGridCsv.length > 0,
+  );
+
+  if (!intGridLayer) return [];
+
+  const gridSize = intGridLayer.__gridSize;
+  const cols = intGridLayer.__cWid;
+  const wallObjects = [];
+
+  for (let i = 0; i < intGridLayer.intGridCsv.length; i++) {
+    if (intGridLayer.intGridCsv[i] < 1) continue;
+
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = col * gridSize;
+    const y = row * gridSize;
+
+    const wall = k.add([
+      k.pos(x, y),
+      k.rect(gridSize, gridSize),
+      k.area(),
+      k.body({ isStatic: true }),
+      k.opacity(0),
+      'wall',
+    ]);
+
+    wallObjects.push(wall);
+  }
+
+  return wallObjects;
 }

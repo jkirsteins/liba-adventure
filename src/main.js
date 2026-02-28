@@ -42,6 +42,9 @@ const CHARACTER_CONFIGS = [
     frameH: 64,
     heightCm: 52, // character body fills ~52 of the 64px frame (rest is breathing room)
     facingRight: false, // sprite sheet faces left
+    // Hitbox relative to anchor('bot') (bottom-center of sprite frame):
+    //   (0,0) = bottom-center, negative y = upward, negative x = leftward
+    hitbox: { x: -9, y: -44, w: 19, h: 44 },
     anims: {
       // Row 0: Idle (5 frames)
       idle: { from: 0, to: 4, loop: true, speed: 6 },
@@ -61,6 +64,7 @@ const CHARACTER_CONFIGS = [
     frameH: 64,
     heightCm: 52,
     facingRight: false, // sprite sheet faces left
+    hitbox: { x: -11, y: -16, w: 21, h: 16 },
     anims: {
       // Row 0: Idle (frames 0-4, 5 frames)
       idle: { from: 0, to: 4, loop: true, speed: 6 },
@@ -78,6 +82,7 @@ const CHARACTER_CONFIGS = [
     frameH: 64,
     heightCm: 52,
     facingRight: false, // sprite sheet faces left
+    hitbox: { x: -11, y: -16, w: 21, h: 16 },
     anims: {
       // Row 0: Idle (frames 0-4, 5 frames)
       idle: { from: 0, to: 4, loop: true, speed: 6 },
@@ -95,6 +100,7 @@ const CHARACTER_CONFIGS = [
     frameH: 32,
     heightCm: 20, // fox character is ~20px tall within the 32px frame
     facingRight: true, // sprite sheet faces right
+    hitbox: { x: -5, y: -8, w: 11, h: 8 },
     anims: {
       // Row 0: Idle (frames 0-4, 5 frames)
       idle: { from: 0, to: 4, loop: true, speed: 6 },
@@ -112,6 +118,7 @@ const CHARACTER_CONFIGS = [
     frameH: 64,
     heightCm: 48, // character body fills ~48 of the 64px frame
     facingRight: true,
+    hitbox: { x: -11, y: -16, w: 21, h: 16 },
     anims: { idle: { from: 0, to: 4, loop: true, speed: 6 } },
   },
   {
@@ -122,6 +129,7 @@ const CHARACTER_CONFIGS = [
     frameH: 64,
     heightCm: 48, // character body fills ~48 of the 64px frame
     facingRight: false,
+    hitbox: { x: -11, y: -16, w: 21, h: 16 },
     anims: { idle: { from: 0, to: 4, loop: true, speed: 6 } },
   },
   {
@@ -132,6 +140,7 @@ const CHARACTER_CONFIGS = [
     frameH: 64,
     heightCm: 48, // character body fills ~48 of the 64px frame
     facingRight: true,
+    hitbox: { x: -11, y: -16, w: 21, h: 16 },
     anims: { idle: { from: 0, to: 4, loop: true, speed: 6 } },
   },
 ];
@@ -146,6 +155,30 @@ CHARACTER_CONFIGS.forEach((cfg) => {
     anims: cfg.anims,
   });
 });
+
+// Build a collision area from a character's hitbox config.
+// anchorMode: 'bot' (anchor at bottom-center) or 'center' (anchor at sprite center).
+//
+// Kaplay's worldArea() applies an anchor-based offset to Rect shapes:
+//   anchor('bot')    -> shifts rect by (-W/2, -H)
+//   anchor('center') -> shifts rect by (-W/2, -H/2)
+// Our hitbox coords are relative to the sprite's bottom-center, so we
+// compensate for Kaplay's anchor shift to get the correct world position.
+function makeHitboxArea(key, anchorMode = 'bot') {
+  const cfg = CHARACTER_CONFIGS.find((c) => c.key === key);
+  if (!cfg || !cfg.hitbox) return k.area();
+  const hb = cfg.hitbox;
+  // Undo Kaplay's automatic anchor offset so the shape lands where we intend
+  const rectX = hb.x + hb.w / 2;
+  let rectY;
+  if (anchorMode === 'bot') {
+    rectY = hb.y + hb.h;
+  } else {
+    // For center anchor, also shift from bot-relative to center-relative coords
+    rectY = hb.y + cfg.frameH / 2 + hb.h / 2;
+  }
+  return k.area({ shape: new k.Rect(k.vec2(rectX, rectY), hb.w, hb.h) });
+}
 
 // The green slime enemy (8 columns, 3 rows) - not in debug viewer
 k.loadSprite('slime', 'sprites/enemies/slime-green.png', {
@@ -228,6 +261,13 @@ k.scene('debug', () => {
   let charIdx = 0;
   let animIdx = 0;
 
+  // -- Hitbox editor state --
+  let hitboxMode = false;
+  let editorHitbox = { ...CHARACTER_CONFIGS[0].hitbox };
+  let dragTarget = null; // null | 'body' | 'tl' | 'tr' | 'bl' | 'br'
+  let dragStartMouse = null;
+  let dragStartHitbox = null;
+
   // How many screen pixels equal 1 in-game cm.
   // Tune this to control the overall zoom level of the viewer.
   const VIEWER_PX_PER_CM = 5;
@@ -241,9 +281,12 @@ k.scene('debug', () => {
 
   // Help text at the top
   k.add([
-    k.text('Q/E: character  |  Up/Down: anim  |  Left/Right: flip  |  G: game', {
-      size: 14,
-    }),
+    k.text(
+      'Q/E: character  |  Up/Down: anim  |  Left/Right: flip  |  H: hitbox  |  G: game',
+      {
+        size: 14,
+      },
+    ),
     k.pos(k.width() / 2, 18),
     k.anchor('center'),
     k.color(180, 180, 180),
@@ -329,7 +372,13 @@ k.scene('debug', () => {
     preview.use(k.sprite(cfg.key, { anim: animName }));
     preview.play(animName, { loop: true }); // always loop in viewer
     preview.scale = k.vec2(sc);
-    preview.flipX = false; // flipX=false always shows the natural/default facing direction
+    // Force no flip in hitbox mode to avoid coordinate confusion
+    preview.flipX = hitboxMode ? false : false;
+
+    // Reload editor hitbox from this character's config
+    if (cfg.hitbox) {
+      editorHitbox = { ...cfg.hitbox };
+    }
 
     // Resize border to match this character's frame size at the new scale
     border.width = cfg.frameW * sc + 4;
@@ -383,6 +432,245 @@ k.scene('debug', () => {
   // G key goes to the prison scene
   k.onKeyPress('g', () => {
     goToPrison();
+  });
+
+  // ==============================================
+  // Hitbox editor - toggle with H key
+  // Drag corners to resize, drag body to move.
+  // Values displayed in real-time for copy-paste.
+  // ==============================================
+
+  k.onKeyPress('h', () => {
+    hitboxMode = !hitboxMode;
+    dragTarget = null;
+    dragStartMouse = null;
+    dragStartHitbox = null;
+    if (hitboxMode) {
+      // Force no flip so hitbox coordinates aren't mirrored
+      preview.flipX = false;
+    }
+    updateHitboxUI();
+  });
+
+  // Convert hitbox coords (relative to anchor='bot') to screen coords.
+  // In the debug viewer the preview uses anchor='center', so bottom-center
+  // of the sprite is at previewY + (frameH * scale) / 2.
+  function hitboxToScreen(hb) {
+    const cfg = CHARACTER_CONFIGS[charIdx];
+    const sc = displayScale(cfg);
+    const botCenterY = previewY + (cfg.frameH * sc) / 2;
+    return {
+      x: previewX + hb.x * sc,
+      y: botCenterY + hb.y * sc,
+      w: hb.w * sc,
+      h: hb.h * sc,
+    };
+  }
+
+  // Check if a screen point is within radius of a target point
+  function nearPoint(px, py, tx, ty, radius) {
+    const dx = px - tx;
+    const dy = py - ty;
+    return dx * dx + dy * dy <= radius * radius;
+  }
+
+  // Hit-test the mouse against corners and body, return drag target name
+  function hitTestHitbox(mx, my) {
+    const sr = hitboxToScreen(editorHitbox);
+    const r = 10; // corner grab radius in screen pixels
+
+    // Corners first (higher priority than body)
+    if (nearPoint(mx, my, sr.x, sr.y, r)) return 'tl';
+    if (nearPoint(mx, my, sr.x + sr.w, sr.y, r)) return 'tr';
+    if (nearPoint(mx, my, sr.x, sr.y + sr.h, r)) return 'bl';
+    if (nearPoint(mx, my, sr.x + sr.w, sr.y + sr.h, r)) return 'br';
+
+    // Body
+    if (mx >= sr.x && mx <= sr.x + sr.w && my >= sr.y && my <= sr.y + sr.h) {
+      return 'body';
+    }
+    return null;
+  }
+
+  k.onMousePress('left', () => {
+    if (!hitboxMode) return;
+    const mp = k.mousePos();
+    const target = hitTestHitbox(mp.x, mp.y);
+    if (target) {
+      dragTarget = target;
+      dragStartMouse = { x: mp.x, y: mp.y };
+      dragStartHitbox = { ...editorHitbox };
+    }
+  });
+
+  k.onMouseRelease('left', () => {
+    dragTarget = null;
+    dragStartMouse = null;
+    dragStartHitbox = null;
+  });
+
+  k.onMouseMove(() => {
+    if (!hitboxMode || !dragTarget || !dragStartMouse) return;
+
+    const mp = k.mousePos();
+    const cfg = CHARACTER_CONFIGS[charIdx];
+    const sc = displayScale(cfg);
+
+    // Delta in sprite-pixel units (rounded for pixel-perfect editing)
+    const dx = Math.round((mp.x - dragStartMouse.x) / sc);
+    const dy = Math.round((mp.y - dragStartMouse.y) / sc);
+    const sh = dragStartHitbox;
+
+    if (dragTarget === 'body') {
+      editorHitbox.x = sh.x + dx;
+      editorHitbox.y = sh.y + dy;
+    } else if (dragTarget === 'tl') {
+      editorHitbox.x = sh.x + dx;
+      editorHitbox.y = sh.y + dy;
+      editorHitbox.w = Math.max(1, sh.w - dx);
+      editorHitbox.h = Math.max(1, sh.h - dy);
+    } else if (dragTarget === 'tr') {
+      editorHitbox.y = sh.y + dy;
+      editorHitbox.w = Math.max(1, sh.w + dx);
+      editorHitbox.h = Math.max(1, sh.h - dy);
+    } else if (dragTarget === 'bl') {
+      editorHitbox.x = sh.x + dx;
+      editorHitbox.w = Math.max(1, sh.w - dx);
+      editorHitbox.h = Math.max(1, sh.h + dy);
+    } else if (dragTarget === 'br') {
+      editorHitbox.w = Math.max(1, sh.w + dx);
+      editorHitbox.h = Math.max(1, sh.h + dy);
+    }
+  });
+
+  // -- Hitbox editor UI elements (game objects, hidden until H is pressed) --
+  const hitboxValLabel = k.add([
+    k.text('', { size: 16 }),
+    k.pos(k.width() / 2, k.height() - 55),
+    k.anchor('center'),
+    k.color(k.Color.fromHex('#00ff00')),
+    k.fixed(),
+    k.z(200),
+    k.opacity(0),
+  ]);
+
+  const hitboxModeLabel = k.add([
+    k.text('HITBOX EDITOR (H to exit)', { size: 14 }),
+    k.pos(k.width() / 2, 80),
+    k.anchor('center'),
+    k.color(k.Color.fromHex('#ff6666')),
+    k.fixed(),
+    k.z(200),
+    k.opacity(0),
+  ]);
+
+  const copyBtnBg = k.add([
+    k.rect(80, 24, { radius: 4 }),
+    k.pos(k.width() / 2, k.height() - 24),
+    k.anchor('center'),
+    k.color(k.Color.fromHex('#225522')),
+    k.area(),
+    k.fixed(),
+    k.z(200),
+    k.opacity(0),
+  ]);
+
+  const copyBtnText = k.add([
+    k.text('Copy', { size: 14 }),
+    k.pos(k.width() / 2, k.height() - 24),
+    k.anchor('center'),
+    k.color(k.Color.WHITE),
+    k.fixed(),
+    k.z(201),
+    k.opacity(0),
+  ]);
+
+  // Hover highlight
+  copyBtnBg.onHover(() => {
+    if (hitboxMode) copyBtnBg.color = k.Color.fromHex('#338833');
+  });
+  copyBtnBg.onHoverEnd(() => {
+    copyBtnBg.color = k.Color.fromHex('#225522');
+  });
+
+  // Click to copy hitbox values to clipboard
+  copyBtnBg.onClick(() => {
+    if (!hitboxMode) return;
+    const hb = editorHitbox;
+    const text = `hitbox: { x: ${hb.x}, y: ${hb.y}, w: ${hb.w}, h: ${hb.h} }`;
+    navigator.clipboard.writeText(text);
+    copyBtnText.text = 'Copied!';
+    k.wait(1, () => {
+      copyBtnText.text = 'Copy';
+    });
+  });
+
+  // Show/hide hitbox UI elements when mode toggles
+  function updateHitboxUI() {
+    const vis = hitboxMode ? 1 : 0;
+    hitboxValLabel.opacity = vis;
+    hitboxModeLabel.opacity = vis;
+    copyBtnBg.opacity = vis;
+    copyBtnText.opacity = vis;
+  }
+
+  // Keep the value label in sync with the editor state
+  k.onUpdate(() => {
+    if (!hitboxMode) return;
+    const hb = editorHitbox;
+    hitboxValLabel.text = `hitbox: { x: ${hb.x}, y: ${hb.y}, w: ${hb.w}, h: ${hb.h} }`;
+  });
+
+  // Draw the hitbox overlay
+  k.onDraw(() => {
+    if (!hitboxMode) return;
+
+    const sr = hitboxToScreen(editorHitbox);
+    const cfg = CHARACTER_CONFIGS[charIdx];
+    const sc = displayScale(cfg);
+
+    // Semi-transparent green rectangle for the hitbox
+    k.drawRect({
+      pos: k.vec2(sr.x, sr.y),
+      width: sr.w,
+      height: sr.h,
+      color: k.Color.fromHex('#00ff00'),
+      opacity: 0.3,
+    });
+
+    // Green outline
+    k.drawRect({
+      pos: k.vec2(sr.x, sr.y),
+      width: sr.w,
+      height: sr.h,
+      fill: false,
+      outline: { width: 2, color: k.Color.fromHex('#00ff00') },
+    });
+
+    // Small red dot at anchor point (bottom-center of sprite)
+    const botCenterY = previewY + (cfg.frameH * sc) / 2;
+    k.drawCircle({
+      pos: k.vec2(previewX, botCenterY),
+      radius: 3,
+      color: k.Color.RED,
+    });
+
+    // Corner handles - white normally, cyan when active/hovered
+    const mp = k.mousePos();
+    const hovered = dragTarget || hitTestHitbox(mp.x, mp.y);
+    const corners = [
+      { name: 'tl', x: sr.x, y: sr.y },
+      { name: 'tr', x: sr.x + sr.w, y: sr.y },
+      { name: 'bl', x: sr.x, y: sr.y + sr.h },
+      { name: 'br', x: sr.x + sr.w, y: sr.y + sr.h },
+    ];
+    for (const c of corners) {
+      k.drawCircle({
+        pos: k.vec2(c.x, c.y),
+        radius: 5,
+        color: hovered === c.name ? k.Color.CYAN : k.Color.WHITE,
+      });
+    }
   });
 });
 
@@ -512,7 +800,7 @@ k.scene('game', () => {
     k.sprite('warrior', { anim: 'idle' }),
     k.pos(k.width() / 2, k.height() / 2),
     k.anchor('center'),
-    k.area({ shape: new k.Rect(k.vec2(-12, -12), 24, 24) }),
+    makeHitboxArea('warrior', 'center'),
     k.body(),
     k.scale(2), // Make the character bigger so we can see it
     k.z(10),
@@ -678,6 +966,16 @@ const ZOOM_STEPS = [1, 2, 3, 4, 5, 6];
 const DEFAULT_ZOOM = 2;
 
 k.scene('prison', (ldtkData) => {
+  // Enable gravity so the player falls to the ground
+  k.setGravity(800);
+
+  // Player reference - assigned inside the Hero entity handler below,
+  // used by the onUpdate loop for movement and camera tracking
+  let player = null;
+
+  // Block movement while a dialogue is on screen
+  let dialogueActive = false;
+
   // Render the level at (0, 0) - camera handles centering
   const { level } = renderLdtkLevel(
     k,
@@ -690,13 +988,17 @@ k.scene('prison', (ldtkData) => {
     {
       // The Hero entity uses the warrior sprite at natural size.
       // The 80x64 frame has padding so scale(1) looks right.
+      // A small collision box at the feet keeps wall collisions tight.
       Hero: (entity) => {
-        k.add([
+        player = k.add([
           k.sprite('warrior', { anim: 'idle' }),
           k.pos(entity.px[0], entity.px[1]),
           k.anchor('bot'),
+          makeHitboxArea('warrior', 'bot'),
+          k.body(),
           k.scale(1),
           k.z(10),
+          'player',
         ]);
       },
 
@@ -715,9 +1017,60 @@ k.scene('prison', (ldtkData) => {
   // After a brief pause so the player can see the prison cell,
   // start the drunk cellmate's dialogue
   k.wait(1.5, () => {
+    dialogueActive = true;
     startDialogue(k, PRISON_DRUNK_DIALOGUE, () => {
-      // Dialogue finished - nothing to do for now
+      dialogueActive = false;
+      // Return to idle when dialogue ends so the player isn't stuck mid-walk
+      if (player) player.play('idle');
     });
+  });
+
+  // -- Player movement --
+  const SPEED = 80; // pixels per second - slow for the confined prison space
+
+  // Track whether the player was moving last frame to avoid replaying anims
+  let moving = false;
+
+  k.onUpdate(() => {
+    if (!player) return;
+
+    // Skip all movement input while a dialogue box is on screen
+    if (dialogueActive) return;
+
+    const wasMoving = moving;
+    moving = false;
+
+    if (k.isKeyDown('left')) {
+      player.move(-SPEED, 0);
+      player.flipX = false; // warrior faces left naturally - no flip needed
+      moving = true;
+    } else if (k.isKeyDown('right')) {
+      player.move(SPEED, 0);
+      player.flipX = true; // flip left-facing warrior to face right
+      moving = true;
+    }
+
+    // Switch between walk and idle only when the state changes
+    if (moving && !wasMoving) {
+      player.play('walk');
+    } else if (!moving && wasMoving) {
+      player.play('idle');
+    }
+
+    // Camera follows the player, clamped so it never shows outside the level.
+    // When the level is smaller than the viewport, center on the level instead.
+    const zoom = ZOOM_STEPS[zoomIdx];
+    const halfViewW = k.width() / (2 * zoom);
+    const halfViewH = k.height() / (2 * zoom);
+    const camX =
+      level.pxWid < halfViewW * 2
+        ? level.pxWid / 2
+        : Math.max(halfViewW, Math.min(level.pxWid - halfViewW, player.pos.x));
+    const camY =
+      level.pxHei < halfViewH * 2
+        ? level.pxHei / 2
+        : Math.max(halfViewH, Math.min(level.pxHei - halfViewH, player.pos.y));
+    k.setCamPos(camX, camY);
   });
 
   // Center camera on the level and set default 2x zoom
@@ -738,6 +1091,41 @@ k.scene('prison', (ldtkData) => {
       k.setCamScale(ZOOM_STEPS[zoomIdx]);
     }
   });
+
+  // -- Debug collision visualization toggle --
+  let showColliders = false;
+
+  k.onKeyPress('c', () => {
+    showColliders = !showColliders;
+    const walls = k.get('wall');
+    for (const w of walls) {
+      w.opacity = showColliders ? 0.3 : 0;
+      w.color = showColliders ? k.Color.RED : k.Color.WHITE;
+    }
+  });
+
+  // Draw the player's collision area when colliders are visible
+  k.onDraw(() => {
+    if (!showColliders || !player) return;
+    const area = player.worldArea();
+    const pts = area.pts ? area.pts : area.points();
+    k.drawPolygon({
+      pts,
+      fill: true,
+      color: k.Color.fromHex('#00ff00'),
+      opacity: 0.3,
+      outline: { width: 1, color: k.Color.GREEN },
+    });
+  });
+
+  // Small hint label in the bottom-left corner
+  k.add([
+    k.text('C: colliders', { size: 10 }),
+    k.pos(8, k.height() - 16),
+    k.color(k.Color.fromHex('#aaaaaa')),
+    k.fixed(),
+    k.z(100),
+  ]);
 
   // Scene label (fixed so it doesn't move with camera)
   k.add([

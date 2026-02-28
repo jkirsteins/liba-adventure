@@ -11,7 +11,7 @@
 	"iid": "7e050600-fa90-11f0-b33e-85eea610abe5",
 	"jsonVersion": "1.5.3",
 	"appBuildId": 473703,
-	"nextUid": 18,
+	"nextUid": 20,
 	"identifierStyle": "Capitalize",
 	"toc": [],
 	"worldLayout": "Free",
@@ -41,6 +41,41 @@
 	"customCommands": [],
 	"flags": [],
 	"defs": { "layers": [
+		{
+			"__type": "IntGrid",
+			"identifier": "IntGrid",
+			"type": "IntGrid",
+			"uid": 19,
+			"doc": null,
+			"uiColor": null,
+			"gridSize": 16,
+			"guideGridWid": 0,
+			"guideGridHei": 0,
+			"displayOpacity": 1,
+			"inactiveOpacity": 1,
+			"hideInList": false,
+			"hideFieldsWhenInactive": false,
+			"canSelectWhenInactive": true,
+			"renderInWorldView": true,
+			"pxOffsetX": 0,
+			"pxOffsetY": 0,
+			"parallaxFactorX": 0,
+			"parallaxFactorY": 0,
+			"parallaxScaling": true,
+			"requiredTags": [],
+			"excludedTags": [],
+			"autoTilesKilledByOtherLayerUid": null,
+			"uiFilterTags": [],
+			"useAsyncRender": false,
+			"intGridValues": [{ "value": 1, "identifier": null, "color": "#000000", "tile": null, "groupUid": 0 }],
+			"intGridValuesGroups": [],
+			"autoRuleGroups": [],
+			"autoSourceLayerDefUid": null,
+			"tilesetDefUid": null,
+			"tilePivotX": 0,
+			"tilePivotY": 0,
+			"biomeFieldUid": null
+		},
 		{
 			"__type": "Entities",
 			"identifier": "Entities",
@@ -148,7 +183,7 @@
 		}
 	], "entities": [
 		{
-			"identifier": "Doors",
+			"identifier": "PrisonDoor",
 			"uid": 6,
 			"tags": [],
 			"exportToToc": false,
@@ -180,7 +215,48 @@
 			"limitBehavior": "MoveLastOne",
 			"pivotX": 0.5,
 			"pivotY": 0.5,
-			"fieldDefs": []
+			"fieldDefs": [
+				{
+					"identifier": "solid",
+					"doc": null,
+					"__type": "Bool",
+					"uid": 18,
+					"type": "F_Bool",
+					"isArray": false,
+					"canBeNull": false,
+					"arrayMinLength": null,
+					"arrayMaxLength": null,
+					"editorDisplayMode": "Hidden",
+					"editorDisplayScale": 1,
+					"editorDisplayPos": "Above",
+					"editorLinkStyle": "StraightArrow",
+					"editorDisplayColor": null,
+					"editorAlwaysShow": false,
+					"editorShowInWorld": true,
+					"editorCutLongValues": true,
+					"editorTextSuffix": null,
+					"editorTextPrefix": null,
+					"useForSmartColor": false,
+					"exportToToc": false,
+					"searchable": false,
+					"min": null,
+					"max": null,
+					"regex": null,
+					"acceptFileTypes": null,
+					"defaultOverride": {
+						"id": "V_Bool",
+						"params": [ true ]
+					},
+					"textLanguageMode": null,
+					"symmetricalRef": false,
+					"autoChainRef": true,
+					"allowOutOfLevelRef": true,
+					"allowedRefs": "OnlySame",
+					"allowedRefsEntityUid": null,
+					"allowedRefTags": [],
+					"tilesetUid": null
+				}
+			]
 		},
 		{
 			"identifier": "Hero",
@@ -218,7 +294,7 @@
 			"fieldDefs": []
 		},
 		{
-			"identifier": "Entity",
+			"identifier": "DoubleDoor",
 			"uid": 9,
 			"tags": [],
 			"exportToToc": false,
@@ -361,7 +437,7 @@
 			"fieldDefs": []
 		},
 		{
-			"identifier": "Skapitis",
+			"identifier": "WoodenStand",
 			"uid": 16,
 			"tags": [],
 			"exportToToc": false,
@@ -543,6 +619,36 @@
 			"fieldInstances": [],
 			"layerInstances": [
 				{
+					"__identifier": "IntGrid",
+					"__type": "IntGrid",
+					"__cWid": 23,
+					"__cHei": 6,
+					"__gridSize": 16,
+					"__opacity": 1,
+					"__pxTotalOffsetX": 0,
+					"__pxTotalOffsetY": 0,
+					"__tilesetDefUid": null,
+					"__tilesetRelPath": null,
+					"iid": "fbb86ee0-fa90-11f0-8be6-af2a6cc9dacc",
+					"levelId": 0,
+					"layerDefUid": 19,
+					"pxOffsetX": 0,
+					"pxOffsetY": 0,
+					"visible": true,
+					"optionalRules": [],
+					"intGridCsv": [
+						1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,
+						1,1,1,1,1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,
+						0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,
+						0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+					],
+					"autoLayerTiles": [],
+					"seed": 3882974,
+					"overrideTilesetUid": null,
+					"gridTiles": [],
+					"entityInstances": []
+				},
+				{
 					"__identifier": "Entities",
 					"__type": "Entities",
 					"__cWid": 23,
@@ -567,7 +673,7 @@
 					"gridTiles": [],
 					"entityInstances": [
 						{
-							"__identifier": "Doors",
+							"__identifier": "PrisonDoor",
 							"__grid": [7,3],
 							"__pivot": [0.5,0.5],
 							"__tags": [],
@@ -578,12 +684,12 @@
 							"height": 48,
 							"defUid": 6,
 							"px": [120,56],
-							"fieldInstances": [],
+							"fieldInstances": [{ "__identifier": "solid", "__type": "Bool", "__value": true, "__tile": null, "defUid": 18, "realEditorValues": [null] }],
 							"__worldX": 120,
 							"__worldY": 104
 						},
 						{
-							"__identifier": "Doors",
+							"__identifier": "PrisonDoor",
 							"__grid": [15,3],
 							"__pivot": [0.5,0.5],
 							"__tags": [],
@@ -594,7 +700,7 @@
 							"height": 48,
 							"defUid": 6,
 							"px": [248,56],
-							"fieldInstances": [],
+							"fieldInstances": [{ "__identifier": "solid", "__type": "Bool", "__value": true, "__tile": null, "defUid": 18, "realEditorValues": [] }],
 							"__worldX": 248,
 							"__worldY": 104
 						},
@@ -615,7 +721,7 @@
 							"__worldY": 128
 						},
 						{
-							"__identifier": "Entity",
+							"__identifier": "DoubleDoor",
 							"__grid": [10,3],
 							"__pivot": [0,0.5],
 							"__tags": [],
@@ -682,7 +788,7 @@
 							"__worldY": 128
 						},
 						{
-							"__identifier": "Skapitis",
+							"__identifier": "WoodenStand",
 							"__grid": [1,4],
 							"__pivot": [0,1],
 							"__tags": [],
@@ -712,7 +818,7 @@
 					"__pxTotalOffsetX": 0,
 					"__pxTotalOffsetY": 0,
 					"__tilesetDefUid": 3,
-					"__tilesetRelPath": "../../Downloads/GandalfHardcore Pixel Art Medieval Fantasy Assets/Castle Tiles.png",
+					"__tilesetRelPath": "sprites/tiles/castle.png",
 					"iid": "1e79af00-fa90-11f0-b33e-8bee622cdd31",
 					"levelId": 0,
 					"layerDefUid": 2,
@@ -820,7 +926,7 @@
 					"__pxTotalOffsetX": 0,
 					"__pxTotalOffsetY": 0,
 					"__tilesetDefUid": 3,
-					"__tilesetRelPath": "../../Downloads/GandalfHardcore Pixel Art Medieval Fantasy Assets/Castle Tiles.png",
+					"__tilesetRelPath": "sprites/tiles/castle.png",
 					"iid": "30c234b0-fa90-11f0-b33e-4328c9450c19",
 					"levelId": 0,
 					"layerDefUid": 4,
