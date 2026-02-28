@@ -291,6 +291,16 @@ k.scene('game', () => {
     k.z(100),
   ]);
 
+  // -- Scene label in the top-right corner --
+  k.add([
+    k.text('Town', { size: 20 }),
+    k.pos(k.width() - 12, 60),
+    k.anchor('topright'),
+    k.color(200, 200, 255),
+    k.fixed(),
+    k.z(100),
+  ]);
+
   // -- Instructions at the bottom --
   k.add([
     k.text('Arrow keys to move!', { size: 16 }),
