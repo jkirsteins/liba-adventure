@@ -59,6 +59,7 @@ export default [
       sourceType: 'module',
       globals: {
         ...globals.browser,
+        __GIT_HASH__: 'readonly',
       },
     },
     rules: {

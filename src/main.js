@@ -2001,7 +2001,7 @@ k.scene('prison', (sceneData) => {
 
 // Helper: fetch LDtk data then go to the prison scene
 function goToPrison(levelName, inventory) {
-  preloadLdtk('prison.ldtk').then((data) => {
+  preloadLdtk(`prison.ldtk?v=${__GIT_HASH__}`).then((data) => {
     k.go('prison', {
       ldtkData: data,
       levelName: levelName || null,
