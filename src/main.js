@@ -1545,6 +1545,200 @@ k.scene('prison', (ldtkData) => {
 
         return stand;
       },
+
+      // PrisonDoor - an iron door that can be lockpicked with the right items.
+      // Quest doors (with quest_item_id) are interactive; others render as static tiles.
+      PrisonDoor: (entity) => {
+        const tile = entity.__tile;
+        const gridSize = 16;
+        const cols = 26;
+        const startCol = tile.x / gridSize;
+        const startRow = tile.y / gridSize;
+        const tilesH = tile.h / gridSize;
+
+        const pivot = entity.__pivot;
+        const topX = entity.px[0] - pivot[0] * entity.width;
+        const topY = entity.px[1] - pivot[1] * entity.height;
+
+        const questId = getEntityField(entity, 'quest_item_id');
+
+        // --- Non-quest doors: static tiles + solid body (replicates default renderer) ---
+        if (!questId) {
+          for (let row = 0; row < tilesH; row++) {
+            const frame = (startRow + row) * cols + startCol;
+            k.add([
+              k.sprite('castle-tiles', { frame }),
+              k.pos(topX, topY + row * gridSize),
+              k.z(5),
+            ]);
+          }
+          if (getEntityField(entity, 'solid') === true) {
+            k.add([
+              k.pos(topX, topY),
+              k.rect(entity.width, entity.height),
+              k.area(),
+              k.body({ isStatic: true }),
+              k.opacity(0),
+              'wall',
+            ]);
+          }
+          return null;
+        }
+
+        // --- Quest door: interactive lockpickable door ---
+        const spriteData = k.getSprite('castle-tiles');
+        let texW, texH;
+        if (spriteData && spriteData.data && spriteData.data.tex) {
+          texW = spriteData.data.tex.width;
+          texH = spriteData.data.tex.height;
+        } else {
+          texW = cols * gridSize;
+          texH = 16 * gridSize;
+        }
+        const stepX = 1 / texW;
+        const stepY = 1 / texH;
+
+        // Render door sub-tiles with outline shader
+        const doorTiles = [];
+        const ref = { door: null };
+        for (let row = 0; row < tilesH; row++) {
+          const frame = (startRow + row) * cols + startCol;
+          doorTiles.push(
+            k.add([
+              k.sprite('castle-tiles', { frame }),
+              k.pos(topX, topY + row * gridSize),
+              k.z(5),
+              k.shader('outline', () => ({
+                u_enabled: ref.door && ref.door.outlineEnabled ? 1.0 : 0.0,
+                u_stepX: stepX,
+                u_stepY: stepY,
+              })),
+            ]),
+          );
+        }
+
+        // Invisible interaction/collision target
+        ref.door = k.add([
+          k.pos(topX, topY),
+          k.rect(entity.width, entity.height),
+          k.area(),
+          k.body({ isStatic: true }),
+          k.opacity(0),
+          'wall',
+          k.z(5),
+        ]);
+        const door = ref.door;
+        door.outlineEnabled = false;
+
+        door.interactable = true;
+        door.interactLabel = 'Open';
+        door.interactW = entity.width;
+        door.interactH = entity.height;
+
+        door.onInteract = () => {
+          setUIOpen(true);
+          dialogueActive = true;
+
+          const hasNail = inventory.has('rusty-nail');
+          const hasWire = inventory.has('steel-wire');
+
+          const steps = [
+            {
+              speaker: 'You',
+              text: 'A heavy iron door. It looks locked.',
+            },
+            {
+              speaker: 'You',
+              prompt: 'What do you do?',
+              choices: [
+                {
+                  text: 'Try to open it.',
+                  next: [{ speaker: 'You', text: "It won't budge. Locked tight." }],
+                },
+                {
+                  text: 'Pick the lock.',
+                  next: buildLockpickSteps(hasNail, hasWire),
+                },
+              ],
+            },
+          ];
+
+          startDialogue(k, steps, () => {
+            dialogueActive = false;
+            setUIOpen(false);
+          });
+        };
+
+        function buildLockpickSteps(hasNail, hasWire) {
+          if (!hasNail && !hasWire) {
+            return [
+              {
+                speaker: 'You',
+                text: "I'd need something thin and sturdy to pick this lock. I've got nothing that would work.",
+              },
+            ];
+          }
+
+          if (hasNail && hasWire) {
+            return [
+              {
+                speaker: 'You',
+                text: 'A rusty nail and some steel wire... I can fashion a lockpick from these.',
+              },
+              {
+                speaker: 'You',
+                prompt: 'Attempt to pick the lock?',
+                choices: [
+                  {
+                    text: 'Give it a try.',
+                    onSelect: () => {
+                      const success = Math.random() < 1 / 3;
+                      if (success) {
+                        inventory.remove('rusty-nail');
+                        inventory.remove('steel-wire');
+                        for (const t of doorTiles) t.destroy();
+                        door.destroy();
+                      }
+                      door._lockpickSuccess = success;
+                    },
+                    next: [
+                      {
+                        speaker: 'You',
+                        get text() {
+                          if (door._lockpickSuccess) {
+                            return 'The lock clicks open. Freedom is one step closer.';
+                          }
+                          return 'The pick slips... no luck this time. But I think I can try again.';
+                        },
+                      },
+                    ],
+                  },
+                  {
+                    text: 'Not yet.',
+                    next: [
+                      { speaker: 'You', text: 'Better to be prepared before I try.' },
+                    ],
+                  },
+                ],
+              },
+            ];
+          }
+
+          // Has one but not both
+          const itemName = hasNail ? 'a rusty nail' : 'a steel wire';
+          const missing = hasNail
+            ? 'something flexible like a wire to shape the pick'
+            : 'something rigid like a nail for the tension wrench';
+          return [
+            {
+              speaker: 'You',
+              text: `I've got ${itemName}, but I'd still need ${missing}. Almost enough to make a lockpick.`,
+            },
+          ];
+        }
+
+        return door;
+      },
     },
   );
 
