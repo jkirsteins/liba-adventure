@@ -36,7 +36,7 @@ export function setUIOpen(val) {
  */
 export function setupInteraction(k, player, entities) {
   // How close the player must be to interact (in game pixels)
-  const interactRange = 72;
+  const interactRange = 30;
 
   // Currently focused entity (or null)
   let focused = null;
@@ -71,12 +71,14 @@ export function setupInteraction(k, player, entities) {
     return list;
   }
 
-  // Helper: find the nearest interactable within range
+  // Helper: find the nearest proximity-only interactable within range.
+  // Skips globalInteract entities - those are focused via Tab only.
   function nearestInRange() {
     let best = null;
     let bestDist = Infinity;
     for (const entity of entities) {
       if (!entity.interactable) continue;
+      if (entity.globalInteract) continue;
       if (entity.is && !entity.exists()) continue;
       const dist = player.pos.dist(entityCenter(entity));
       if (dist <= interactRange && dist < bestDist) {
@@ -201,9 +203,10 @@ export function setupInteraction(k, player, entities) {
     const nextIdx = currentIdx + 1;
 
     if (nextIdx >= interactables.length) {
-      // Past the last entity - select nothing
+      // Past the last entity - select nothing (keep focusedByTab true
+      // so proximity tracking doesn't immediately re-focus)
       focused = null;
-      focusedByTab = false;
+      focusedByTab = true;
     } else {
       focused = interactables[nextIdx];
       focusedByTab = true;
