@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   // The game source code lives in src/
+  base: '/liba-adventure/',
   root: '.',
   publicDir: 'public',
   build: {
