@@ -5,6 +5,9 @@ export default defineConfig({
   base: '/liba-adventure/',
   root: '.',
   publicDir: 'public',
+  define: {
+    __GIT_HASH__: JSON.stringify(process.env.GIT_HASH || 'dev'),
+  },
   build: {
     outDir: 'dist',
   },

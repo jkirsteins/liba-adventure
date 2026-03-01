@@ -23,6 +23,8 @@
   </head>
   <body>
     <div id="game-container"></div>
+    <div id="build-hash" style="position:fixed;bottom:2px;right:4px;font:10px monospace;color:#444;pointer-events:none"></div>
     <script type="module" src="/src/main.js"></script>
+    <script type="module">document.getElementById('build-hash').textContent = __GIT_HASH__;</script>
   </body>
 </html>
