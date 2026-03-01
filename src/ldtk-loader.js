@@ -64,6 +64,10 @@ export async function preloadLdtk(url) {
 export function renderLdtkLevel(k, data, tilesetMap, entityHandlers) {
   const level = data.levels[0];
 
+  // Collect game objects returned by entity handlers so callers
+  // can reference spawned entities (e.g. for interactions)
+  const entities = [];
+
   // Tile layers are stored front-to-back in the array,
   // so we reverse to render back-to-front
   const tileLayers = level.layerInstances.filter((l) => l.__type === 'Tiles').reverse();
@@ -106,7 +110,15 @@ export function renderLdtkLevel(k, data, tilesetMap, entityHandlers) {
       // If there's a custom handler, use it instead of the default renderer
       const handler = entityHandlers && entityHandlers[entity.__identifier];
       if (handler) {
-        handler(entity);
+        const result = handler(entity);
+        // Handlers can return a game object, an array of objects, or
+        // nothing. We collect whatever they return so the caller can
+        // reference spawned entities later.
+        if (Array.isArray(result)) {
+          entities.push(...result);
+        } else if (result) {
+          entities.push(result);
+        }
         continue;
       }
 
@@ -182,7 +194,7 @@ export function renderLdtkLevel(k, data, tilesetMap, entityHandlers) {
   // Create collision bodies from the IntGrid layer (if present)
   const walls = createIntGridColliders(k, level);
 
-  return { level, walls };
+  return { level, walls, entities };
 }
 
 /**

@@ -2,6 +2,39 @@ import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 
+// Custom rule: disallow em-dash characters anywhere in source (strings, comments, etc.)
+const noEmDash = {
+  meta: {
+    type: 'suggestion',
+    docs: { description: 'Disallow em-dash characters (\u2014). Use a regular dash (-) instead.' },
+    fixable: 'code',
+    messages: {
+      noEmDash: 'Em-dash (\u2014) is not allowed. Use a regular dash (-) instead.',
+    },
+    schema: [],
+  },
+  create(context) {
+    return {
+      Program() {
+        const sourceCode = context.sourceCode;
+        const text = sourceCode.getText();
+        const regex = /\u2014/g;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+          const loc = sourceCode.getLocFromIndex(match.index);
+          context.report({
+            loc: { start: loc, end: { line: loc.line, column: loc.column + 1 } },
+            messageId: 'noEmDash',
+            fix(fixer) {
+              return fixer.replaceTextRange([match.index, match.index + 1], '-');
+            },
+          });
+        }
+      },
+    };
+  },
+};
+
 export default [
   // Ignore build output and dependencies
   {
@@ -14,6 +47,13 @@ export default [
   // Our game source files
   {
     files: ['src/**/*.js'],
+    linterOptions: {
+      // Disallow all inline config comments (eslint-disable, eslint-enable, etc.)
+      noInlineConfig: true,
+    },
+    plugins: {
+      custom: { rules: { 'no-em-dash': noEmDash } },
+    },
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -39,6 +79,7 @@ export default [
       'eqeqeq': ['warn', 'always'], // Use === instead of ==
       'no-empty': 'warn', // Don't leave empty {} blocks
       'no-console': 'off', // console.log is fine for learning!
+      'custom/no-em-dash': 'error', // Use regular dash (-) not em-dash
     },
   },
 

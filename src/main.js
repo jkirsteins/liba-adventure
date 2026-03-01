@@ -276,6 +276,39 @@ k.loadSprite('furniture-tiles', 'sprites/tiles/furniture.png', {
   sliceY: 13,
 });
 
+// --- Outline shader for interactable entities ---
+// Draws a 1px white outline OUTSIDE the sprite silhouette.
+// For each transparent pixel, check if any neighbor is opaque;
+// if so, fill it white. Leaves the sprite interior untouched.
+k.loadShader(
+  'outline',
+  null,
+  `
+uniform float u_enabled;
+uniform float u_stepX;
+uniform float u_stepY;
+
+vec4 frag(vec2 pos, vec2 uv, vec4 color, sampler2D tex) {
+    vec4 c = def_frag();
+    if (u_enabled < 0.5) return c;
+
+    // Opaque pixels pass through unchanged
+    if (c.a > 0.1) return c;
+
+    // Transparent pixel: check if any cardinal neighbor is opaque
+    float aR = texture2D(tex, vec2(uv.x + u_stepX, uv.y)).a;
+    float aL = texture2D(tex, vec2(uv.x - u_stepX, uv.y)).a;
+    float aT = texture2D(tex, vec2(uv.x, uv.y - u_stepY)).a;
+    float aB = texture2D(tex, vec2(uv.x, uv.y + u_stepY)).a;
+
+    if (aR > 0.1 || aL > 0.1 || aT > 0.1 || aB > 0.1) {
+        return vec4(1.0, 1.0, 1.0, 1.0);
+    }
+    return c;
+}
+`,
+);
+
 // ==============================================
 // Debug scene - animation viewer
 // Keys: Left/Right = switch character, Up/Down = switch anim, G = game
@@ -292,6 +325,29 @@ k.scene('debug', () => {
   let dragStartMouse = null;
   let dragStartHitbox = null;
 
+  // -- Outline debug mode state --
+  // Cycles: 0 = off, 1 = sprite with outline on, 2 = sprite with outline off
+  let outlineMode = 0;
+  let outlineEntityIdx = 0;
+  const OUTLINE_SCALE = 5; // scale up so outline is clearly visible
+
+  // Known entity objects from the prison scene (matching LDtk data).
+  // Each entry stores the sprite name and frame index so the debug
+  // viewer shows the exact same tile as the in-game object.
+  // Source-of-truth entity data matching LDtk __tile coordinates.
+  // tileX/tileY come straight from the LDtk entity's __tile field.
+  const OUTLINE_ENTITIES = [
+    {
+      name: 'WoodenStand',
+      sprite: 'furniture-tiles',
+      tileX: 256, // LDtk __tile.x
+      tileY: 0, // LDtk __tile.y
+      cols: 15,
+      rows: 13,
+      gridSize: 32,
+    },
+  ];
+
   // How many screen pixels equal 1 in-game cm.
   // Tune this to control the overall zoom level of the viewer.
   const VIEWER_PX_PER_CM = 5;
@@ -306,7 +362,7 @@ k.scene('debug', () => {
   // Help text at the top
   k.add([
     k.text(
-      'Q/E: character  |  Up/Down: anim  |  Left/Right: flip  |  H: hitbox  |  G: game',
+      'Q/E: char | Up/Down: anim | Left/Right: flip | H: hitbox | O: outline | G: game',
       {
         size: 14,
       },
@@ -447,15 +503,164 @@ k.scene('debug', () => {
   //   facing left naturally -> flip to face right, no flip to face left
   //   facing right naturally -> no flip to face right, flip to face left
   k.onKeyPress('left', () => {
+    if (outlineMode > 0) {
+      // Cycle through known entities in outline mode
+      const len = OUTLINE_ENTITIES.length;
+      outlineEntityIdx = (outlineEntityIdx - 1 + len) % len;
+      updateOutlineUI();
+      return;
+    }
     preview.flipX = CHARACTER_CONFIGS[charIdx].facingRight;
   });
   k.onKeyPress('right', () => {
+    if (outlineMode > 0) {
+      // Cycle through known entities in outline mode
+      const len = OUTLINE_ENTITIES.length;
+      outlineEntityIdx = (outlineEntityIdx + 1) % len;
+      updateOutlineUI();
+      return;
+    }
     preview.flipX = !CHARACTER_CONFIGS[charIdx].facingRight;
   });
 
   // G key goes to the prison scene
   k.onKeyPress('g', () => {
     goToPrison();
+  });
+
+  // ==============================================
+  // Outline debug mode - toggle with O key
+  // Cycles: off -> outline on -> outline off (compare) -> off
+  // Shows a furniture-tiles sprite with the outline shader applied.
+  // Left/Right arrows cycle through frames when active.
+  // ==============================================
+
+  // Outline preview sprite - hidden initially
+  let outlinePreview = null;
+
+  // Debug info labels for outline mode
+  const outlineModeLabel = k.add([
+    k.text('OUTLINE MODE (O to toggle)', { size: 14 }),
+    k.pos(k.width() / 2, 80),
+    k.anchor('center'),
+    k.color(k.Color.fromHex('#66ccff')),
+    k.fixed(),
+    k.z(200),
+    k.opacity(0),
+  ]);
+
+  const outlineInfoLabel = k.add([
+    k.text('', { size: 14 }),
+    k.pos(k.width() / 2, k.height() - 55),
+    k.anchor('center'),
+    k.color(k.Color.fromHex('#66ccff')),
+    k.fixed(),
+    k.z(200),
+    k.opacity(0),
+  ]);
+
+  const outlineFrameLabel = k.add([
+    k.text('', { size: 14 }),
+    k.pos(k.width() / 2, k.height() - 35),
+    k.anchor('center'),
+    k.color(k.Color.fromHex('#66ccff')),
+    k.fixed(),
+    k.z(200),
+    k.opacity(0),
+  ]);
+
+  // Create or update the outline preview sprite
+  function createOutlinePreview() {
+    if (outlinePreview) {
+      outlinePreview.destroy();
+      outlinePreview = null;
+    }
+
+    const entity = OUTLINE_ENTITIES[outlineEntityIdx];
+
+    // Get texture dimensions for step values
+    const spriteData = k.getSprite(entity.sprite);
+    let texW, texH;
+    if (spriteData && spriteData.data && spriteData.data.tex) {
+      const tex = spriteData.data.tex;
+      texW = tex.width;
+      texH = tex.height;
+    } else {
+      // Fallback - estimate from grid layout
+      texW = entity.cols * entity.gridSize;
+      texH = entity.rows * entity.gridSize;
+    }
+    const stepX = 1 / texW;
+    const stepY = 1 / texH;
+
+    // Compute frame index from LDtk tile coordinates (same formula as spawn code)
+    const startCol = entity.tileX / entity.gridSize;
+    const startRow = entity.tileY / entity.gridSize;
+    const frame = startRow * entity.cols + startCol;
+
+    const outlineEnabled = outlineMode === 1;
+
+    outlinePreview = k.add([
+      k.sprite(entity.sprite, { frame }),
+      k.pos(previewX, previewY),
+      k.anchor('center'),
+      k.scale(OUTLINE_SCALE),
+      k.z(10),
+      k.shader('outline', () => ({
+        u_enabled: outlineEnabled ? 1.0 : 0.0,
+        u_stepX: stepX,
+        u_stepY: stepY,
+      })),
+    ]);
+
+    // Update info labels
+    outlineInfoLabel.text = `tex: ${texW}x${texH}  stepX: ${stepX.toFixed(6)}  stepY: ${stepY.toFixed(6)}`;
+    outlineFrameLabel.text = `${entity.name}  frame: ${frame}  tile: (${entity.tileX},${entity.tileY})  (Left/Right to switch)`;
+  }
+
+  // Show/hide outline mode UI elements
+  function updateOutlineUI() {
+    if (outlineMode > 0) {
+      // Hide character preview and its border
+      preview.hidden = true;
+      border.hidden = true;
+      charLabel.hidden = true;
+      animLabels.forEach((lbl) => (lbl.hidden = true));
+
+      // Show outline UI
+      outlineModeLabel.opacity = 1;
+      outlineInfoLabel.opacity = 1;
+      outlineFrameLabel.opacity = 1;
+      outlineModeLabel.text =
+        outlineMode === 1
+          ? 'OUTLINE MODE - ON (O to toggle off)'
+          : 'OUTLINE MODE - OFF (O to exit)';
+
+      // Create/update the outline preview
+      createOutlinePreview();
+    } else {
+      // Restore character preview
+      preview.hidden = false;
+      border.hidden = false;
+      charLabel.hidden = false;
+      animLabels.forEach((lbl) => (lbl.hidden = false));
+
+      // Hide outline UI
+      outlineModeLabel.opacity = 0;
+      outlineInfoLabel.opacity = 0;
+      outlineFrameLabel.opacity = 0;
+
+      if (outlinePreview) {
+        outlinePreview.destroy();
+        outlinePreview = null;
+      }
+    }
+  }
+
+  k.onKeyPress('o', () => {
+    // Cycle: 0 -> 1 -> 2 -> 0
+    outlineMode = (outlineMode + 1) % 3;
+    updateOutlineUI();
   });
 
   // ==============================================
@@ -984,6 +1189,8 @@ k.scene('game', () => {
 // Pre-load LDtk data and then enter the prison scene
 import { getEntityField, preloadLdtk, renderLdtkLevel } from './ldtk-loader.js';
 import { startDialogue, PRISON_DRUNK_DIALOGUE } from './dialogue.js';
+import { createInventory, openInventoryUI } from './inventory.js';
+import { setupInteraction, setUIOpen } from './interaction.js';
 
 // Integer zoom steps for pixel-perfect scaling
 const ZOOM_STEPS = [1, 2, 3, 4, 5, 6];
@@ -997,11 +1204,14 @@ k.scene('prison', (ldtkData) => {
   // used by the onUpdate loop for movement and camera tracking
   let player = null;
 
-  // Block movement while a dialogue is on screen
+  // Block movement while a dialogue or UI overlay is on screen
   let dialogueActive = false;
 
+  // Player inventory - items found by searching objects
+  const inventory = createInventory();
+
   // Render the level at (0, 0) - camera handles centering
-  const { level } = renderLdtkLevel(
+  const { level, entities } = renderLdtkLevel(
     k,
     ldtkData,
     {
@@ -1035,15 +1245,156 @@ k.scene('prison', (ldtkData) => {
           k.z(10),
         ]);
       },
+
+      // WoodenStand - a searchable furniture object that may contain items.
+      // Renders the tile graphic and provides an interaction callback.
+      WoodenStand: (entity) => {
+        const tile = entity.__tile;
+        // Compute the sprite frame index from tile position in the tileset
+        const gridSize = 32; // furniture tileset grid size
+        const cols = 15; // furniture tileset columns
+        const rows = 13; // furniture tileset rows
+        const startCol = tile.x / gridSize;
+        const startRow = tile.y / gridSize;
+        const frame = startRow * cols + startCol;
+
+        // One texel step in atlas UV space for the outline shader.
+        // Use the actual GPU texture dimensions so the step is correct
+        // even if the GPU pads/resizes the texture to a power of two.
+        const spriteData = k.getSprite('furniture-tiles');
+        let texW, texH;
+        if (spriteData && spriteData.data && spriteData.data.tex) {
+          const tex = spriteData.data.tex;
+          texW = tex.width;
+          texH = tex.height;
+        } else {
+          console.warn(
+            'furniture-tiles texture not available yet, falling back to calculated step',
+          );
+          texW = cols * gridSize;
+          texH = rows * gridSize;
+        }
+        const stepX = 1 / texW;
+        const stepY = 1 / texH;
+
+        // Compute top-left position from pivot
+        const pivot = entity.__pivot;
+        const topX = entity.px[0] - pivot[0] * entity.width;
+        const topY = entity.px[1] - pivot[1] * entity.height;
+
+        // Read the contents field - an array of item strings
+        const contents = getEntityField(entity, 'contents');
+
+        // Track whether this stand has already been searched
+        let searched = false;
+
+        // Only block the player if the entity is marked solid in LDtk
+        const isSolid = getEntityField(entity, 'solid') === true;
+
+        // Ref wrapper so the shader callback can read .stand without
+        // hitting const TDZ (the callback runs during k.add)
+        const ref = { stand: null };
+        ref.stand = k.add([
+          k.sprite('furniture-tiles', { frame }),
+          k.pos(topX, topY),
+          ...(isSolid ? [k.area(), k.body({ isStatic: true }), 'wall'] : []),
+          k.z(5),
+          // Outline shader - toggled by the interaction system
+          k.shader('outline', () => ({
+            u_enabled: ref.stand && ref.stand.outlineEnabled ? 1.0 : 0.0,
+            u_stepX: stepX,
+            u_stepY: stepY,
+          })),
+        ]);
+        const stand = ref.stand;
+        stand.outlineEnabled = false;
+
+        // Mark as interactable so the interaction system picks it up
+        stand.interactable = true;
+        stand.interactLabel = 'Search';
+        // Tell the interaction system how large this entity is for the outline
+        stand.interactW = entity.width;
+        stand.interactH = entity.height;
+
+        stand.onInteract = () => {
+          if (searched) {
+            // Already searched - show a short message
+            setUIOpen(true);
+            dialogueActive = true;
+            startDialogue(k, [{ speaker: 'You', text: 'Nothing left here.' }], () => {
+              dialogueActive = false;
+              setUIOpen(false);
+            });
+            return;
+          }
+
+          // First time searching - check for items
+          if (contents && contents.length > 0) {
+            // Build a message listing found items with capitalized names
+            const displayNames = contents
+              .map((id) =>
+                id
+                  .split('-')
+                  .map((w) => w[0].toUpperCase() + w.slice(1))
+                  .join(' '),
+              )
+              .join(', ');
+
+            // Add each item to the player's inventory
+            for (const item of contents) {
+              inventory.add(item);
+            }
+
+            searched = true;
+            setUIOpen(true);
+            dialogueActive = true;
+            startDialogue(
+              k,
+              [{ speaker: 'You', text: 'You found: ' + displayNames + '!' }],
+              () => {
+                dialogueActive = false;
+                setUIOpen(false);
+              },
+            );
+          } else {
+            // Stand is empty
+            searched = true;
+            setUIOpen(true);
+            dialogueActive = true;
+            startDialogue(k, [{ speaker: 'You', text: 'Nothing useful here.' }], () => {
+              dialogueActive = false;
+              setUIOpen(false);
+            });
+          }
+        };
+
+        return stand;
+      },
     },
   );
+
+  // Wire up proximity-based interaction (E to interact, F to cycle)
+  setupInteraction(k, player, entities);
+
+  // Q key opens the inventory overlay
+  k.onKeyPress('q', () => {
+    if (dialogueActive) return;
+    setUIOpen(true);
+    dialogueActive = true;
+    openInventoryUI(k, inventory, () => {
+      dialogueActive = false;
+      setUIOpen(false);
+    });
+  });
 
   // After a brief pause so the player can see the prison cell,
   // start the drunk cellmate's dialogue
   k.wait(1.5, () => {
     dialogueActive = true;
+    setUIOpen(true);
     startDialogue(k, PRISON_DRUNK_DIALOGUE, () => {
       dialogueActive = false;
+      setUIOpen(false);
     });
   });
 
@@ -1141,9 +1492,9 @@ k.scene('prison', (ldtkData) => {
     });
   });
 
-  // Small hint label in the bottom-left corner
+  // Persistent key-hint bar in the bottom-left corner
   k.add([
-    k.text('C: colliders', { size: 10 }),
+    k.text('E: interact | Q: inventory | F: next item | C: colliders', { size: 10 }),
     k.pos(8, k.height() - 16),
     k.color(k.Color.fromHex('#aaaaaa')),
     k.fixed(),
