@@ -60,9 +60,12 @@ export async function preloadLdtk(url) {
  * @param {object} data - Parsed LDtk JSON (from preloadLdtk)
  * @param {object} tilesetMap - Maps LDtk tileset uid -> Kaplay sprite name
  * @param {object} entityHandlers - Maps entity identifier -> callback(entity)
+ * @param {string} [levelName] - LDtk level identifier to render (defaults to first level)
  */
-export function renderLdtkLevel(k, data, tilesetMap, entityHandlers) {
-  const level = data.levels[0];
+export function renderLdtkLevel(k, data, tilesetMap, entityHandlers, levelName) {
+  const level = levelName
+    ? data.levels.find((l) => l.identifier === levelName) || data.levels[0]
+    : data.levels[0];
 
   // Collect game objects returned by entity handlers so callers
   // can reference spawned entities (e.g. for interactions)
@@ -76,10 +79,18 @@ export function renderLdtkLevel(k, data, tilesetMap, entityHandlers) {
     const spriteName = tilesetMap[layer.__tilesetDefUid];
     if (!spriteName) return; // skip unmapped tilesets
 
+    // Layer pixel offset (e.g. furniture layers with a different grid alignment)
+    const offX = layer.__pxTotalOffsetX || 0;
+    const offY = layer.__pxTotalOffsetY || 0;
+    const half = layer.__gridSize / 2;
+
     for (const tile of layer.gridTiles) {
+      const tx = tile.px[0] + offX;
+      const ty = tile.px[1] + offY;
+
       const components = [
         k.sprite(spriteName, { frame: tile.t }),
-        k.pos(tile.px[0], tile.px[1]),
+        k.pos(tx, ty),
         k.z(layerIdx),
       ];
 
@@ -89,8 +100,8 @@ export function renderLdtkLevel(k, data, tilesetMap, entityHandlers) {
       if (flipH || flipV) {
         components.push(k.scale(flipH ? -1 : 1, flipV ? -1 : 1));
         components.push(k.anchor('center'));
-        // Shift position to keep the tile in the right spot
-        components[1] = k.pos(tile.px[0] + 8, tile.px[1] + 8);
+        // Shift position to center of tile so flip pivots correctly
+        components[1] = k.pos(tx + half, ty + half);
       }
 
       k.add(components);

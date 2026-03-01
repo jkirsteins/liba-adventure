@@ -2,6 +2,7 @@ Architecture guidelines
 
 - When loading .ldtk files, all entities that are spawned should be recognized in OUTLINE_ENTITIES - if they are not, a warning has to be shown somewhere, so we can update the code
 - Interactable entities must set: `interactable`, `interactLabel`, `interactW`, `interactH`, `onInteract()`, and the outline shader. Optional: `globalInteract` (interact from any distance), `interactAnchor` ('bot' if using anchor('bot'))
+- Entity handlers should NOT add `body({ isStatic: true })` unless the entity has an explicit `solid` field set to true in LDtk. Interactive entities especially must be walkable so the player can get within interaction range.
 
 ## World Tone
 

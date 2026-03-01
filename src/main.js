@@ -379,6 +379,15 @@ k.scene('debug', () => {
       rows: 13,
       gridSize: 32,
     },
+    {
+      name: 'DoubleDoor',
+      sprite: 'castle-tiles',
+      tileX: 96,
+      tileY: 112,
+      cols: 26,
+      rows: 16,
+      gridSize: 16,
+    },
   ];
 
   // How many screen pixels equal 1 in-game cm.
@@ -1229,7 +1238,12 @@ import { setupInteraction, setUIOpen } from './interaction.js';
 const ZOOM_STEPS = [1, 2, 3, 4, 5, 6];
 const DEFAULT_ZOOM = 2;
 
-k.scene('prison', (ldtkData) => {
+k.scene('prison', (sceneData) => {
+  // Accept either raw LDtk data (legacy) or structured { ldtkData, levelName, inventory }
+  const ldtkData = sceneData.ldtkData || sceneData;
+  const targetLevel = sceneData.levelName || null;
+  const carriedInventory = sceneData.inventory || null;
+
   // Enable gravity so the player falls to the ground
   k.setGravity(800);
 
@@ -1240,8 +1254,12 @@ k.scene('prison', (ldtkData) => {
   // Block movement while a dialogue or UI overlay is on screen
   let dialogueActive = false;
 
-  // Player inventory - items found by searching objects
-  const inventory = createInventory();
+  // Player inventory - items found by searching objects (carry over if transitioning)
+  const inventory = carriedInventory || createInventory();
+
+  // Track where the level_start DoubleDoor is so we can spawn the player there
+  // if no Hero entity exists in this level (i.e. the player transitioned here)
+  let levelStartPos = null;
 
   // Render the level at (0, 0) - camera handles centering
   const { level, entities } = renderLdtkLevel(
@@ -1739,8 +1757,119 @@ k.scene('prison', (ldtkData) => {
 
         return door;
       },
+
+      // DoubleDoor - a large door used for level transitions.
+      // Doors with go_to_level are interactive; level_start doors mark spawn points.
+      DoubleDoor: (entity) => {
+        const tile = entity.__tile;
+        const gridSize = 16;
+        const cols = 26;
+        const startCol = tile.x / gridSize;
+        const startRow = tile.y / gridSize;
+        const tilesW = tile.w / gridSize;
+        const tilesH = tile.h / gridSize;
+
+        const pivot = entity.__pivot;
+        const topX = entity.px[0] - pivot[0] * entity.width;
+        const topY = entity.px[1] - pivot[1] * entity.height;
+
+        const goToLevel = getEntityField(entity, 'go_to_level');
+        const isLevelStart = getEntityField(entity, 'level_start') === true;
+
+        // Record spawn point for level_start doors
+        if (isLevelStart) {
+          // Player spawns at the base of the door (bottom-center)
+          levelStartPos = { x: topX + entity.width / 2, y: topY + entity.height };
+        }
+
+        // Non-interactive doors (level_start with no destination): static tiles only
+        if (!goToLevel) {
+          for (let row = 0; row < tilesH; row++) {
+            for (let col = 0; col < tilesW; col++) {
+              const frame = (startRow + row) * cols + (startCol + col);
+              k.add([
+                k.sprite('castle-tiles', { frame }),
+                k.pos(topX + col * gridSize, topY + row * gridSize),
+                k.z(5),
+              ]);
+            }
+          }
+          return null;
+        }
+
+        // Interactive door: outline shader + interaction target
+        const spriteData = k.getSprite('castle-tiles');
+        let texW, texH;
+        if (spriteData && spriteData.data && spriteData.data.tex) {
+          texW = spriteData.data.tex.width;
+          texH = spriteData.data.tex.height;
+        } else {
+          texW = cols * gridSize;
+          texH = 16 * gridSize;
+        }
+        const stepX = 1 / texW;
+        const stepY = 1 / texH;
+
+        const doorTiles = [];
+        const ref = { door: null };
+        for (let row = 0; row < tilesH; row++) {
+          for (let col = 0; col < tilesW; col++) {
+            const frame = (startRow + row) * cols + (startCol + col);
+            doorTiles.push(
+              k.add([
+                k.sprite('castle-tiles', { frame }),
+                k.pos(topX + col * gridSize, topY + row * gridSize),
+                k.z(5),
+                k.shader('outline', () => ({
+                  u_enabled: ref.door && ref.door.outlineEnabled ? 1.0 : 0.0,
+                  u_stepX: stepX,
+                  u_stepY: stepY,
+                })),
+              ]),
+            );
+          }
+        }
+
+        // Invisible interaction target covering the door area (no solid body
+        // so the player can walk up to it and trigger the interaction)
+        ref.door = k.add([
+          k.pos(topX, topY),
+          k.rect(entity.width, entity.height),
+          k.area(),
+          k.opacity(0),
+          k.z(5),
+        ]);
+        const door = ref.door;
+        door.outlineEnabled = false;
+
+        door.interactable = true;
+        door.interactLabel = 'Enter';
+        door.interactW = entity.width;
+        door.interactH = entity.height;
+
+        door.onInteract = () => {
+          goToPrison(goToLevel, inventory);
+        };
+
+        return door;
+      },
     },
+    targetLevel,
   );
+
+  // If no Hero entity was found (e.g. Level_1), spawn at the level_start door
+  if (!player && levelStartPos) {
+    player = k.add([
+      k.sprite('warrior', { anim: 'idle' }),
+      k.pos(levelStartPos.x, levelStartPos.y),
+      k.anchor('bot'),
+      makeHitboxArea('warrior', 'bot'),
+      k.body(),
+      k.scale(1),
+      k.z(10),
+      'player',
+    ]);
+  }
 
   // Wire up interaction system (E to interact, Tab to cycle)
   setupInteraction(k, player, entities);
@@ -1871,9 +2000,13 @@ k.scene('prison', (ldtkData) => {
 });
 
 // Helper: fetch LDtk data then go to the prison scene
-function goToPrison() {
+function goToPrison(levelName, inventory) {
   preloadLdtk('prison.ldtk').then((data) => {
-    k.go('prison', data);
+    k.go('prison', {
+      ldtkData: data,
+      levelName: levelName || null,
+      inventory: inventory || null,
+    });
   });
 }
 
