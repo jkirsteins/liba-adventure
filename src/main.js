@@ -1188,8 +1188,8 @@ k.scene('game', () => {
 
 // Pre-load LDtk data and then enter the prison scene
 import { getEntityField, preloadLdtk, renderLdtkLevel } from './ldtk-loader.js';
-import { startDialogue, PRISON_DRUNK_DIALOGUE } from './dialogue.js';
-import { createInventory, openInventoryUI } from './inventory.js';
+import { startDialogue } from './dialogue.js';
+import { createInventory, getItemInfo, openInventoryUI } from './inventory.js';
 import { setupInteraction, setUIOpen } from './interaction.js';
 
 // Integer zoom steps for pixel-perfect scaling
@@ -1236,14 +1236,130 @@ k.scene('prison', (ldtkData) => {
         ]);
       },
 
-      // The Drunk NPC - uses the animated drunkard sprite from the atlas
+      // The Drunk NPC - uses the animated drunkard sprite from the atlas.
+      // Interactable from any distance (globalInteract) via "Talk".
       Drunk: (entity) => {
-        k.add([
+        // Get texture dimensions for the outline shader step values
+        const spriteData = k.getSprite('tavern-npcs');
+        let texW, texH;
+        if (spriteData && spriteData.data && spriteData.data.tex) {
+          const tex = spriteData.data.tex;
+          texW = tex.width;
+          texH = tex.height;
+        } else {
+          // Fallback: tavern-npcs.png is 640x256
+          texW = 640;
+          texH = 256;
+        }
+        const stepX = 1 / texW;
+        const stepY = 1 / texH;
+
+        const ref = { npc: null };
+        ref.npc = k.add([
           k.sprite('drunkard', { anim: 'idle' }),
           k.pos(entity.px[0], entity.px[1]),
           k.anchor('bot'),
           k.z(10),
+          k.shader('outline', () => ({
+            u_enabled: ref.npc && ref.npc.outlineEnabled ? 1.0 : 0.0,
+            u_stepX: stepX,
+            u_stepY: stepY,
+          })),
         ]);
+        const npc = ref.npc;
+        npc.outlineEnabled = false;
+
+        // Read entity contents (e.g. ["steel-wire"]) and track handoff state
+        const contents = getEntityField(entity, 'contents');
+        let itemsGiven = false;
+
+        npc.interactable = true;
+        npc.interactLabel = 'Talk';
+        npc.globalInteract = true;
+        npc.interactAnchor = 'bot';
+        npc.interactW = 64;
+        npc.interactH = 64;
+
+        npc.onInteract = () => {
+          dialogueActive = true;
+          setUIOpen(true);
+
+          let steps;
+          if (!itemsGiven && contents && contents.length > 0) {
+            // Pre-loot dialogue with branching choices
+            steps = [
+              {
+                speaker: 'Drunk Cellmate',
+                text: 'Oi there... ye look a bit lost, friend. Welcome to yer new home, heh.',
+              },
+              {
+                speaker: 'Drunk Cellmate',
+                text: "Name's Grumbold. Been in 'ere so long I forgot what the sky looks like.",
+              },
+              {
+                speaker: 'Grumbold',
+                text: "So tell me... what'd they drag YOU in for?",
+              },
+              {
+                speaker: 'You',
+                prompt: 'Why are you in prison?',
+                choices: [
+                  {
+                    text: "I was framed! I swear, I didn't do anything wrong.",
+                    onSelect: () => {
+                      for (const item of contents) {
+                        inventory.add(item);
+                      }
+                      itemsGiven = true;
+                    },
+                    next: [
+                      {
+                        speaker: 'Grumbold',
+                        text: "Ha! That's what they ALL say, innit? But somethin' about ye... ol' Grumbold believes ye.",
+                      },
+                      {
+                        speaker: 'Grumbold',
+                        text: "'Ere, take this. Found it wedged between the stones. Might be useful for a clever sort like yerself.",
+                      },
+                      {
+                        speaker: 'You',
+                        text: 'You received: Steel Wire.',
+                      },
+                    ],
+                  },
+                  {
+                    text: 'None of your business, old man.',
+                    next: [
+                      {
+                        speaker: 'Grumbold',
+                        text: "Suit yerself, friend. Ol' Grumbold ain't one to pry... much.",
+                      },
+                      {
+                        speaker: 'Grumbold',
+                        text: "Come find me when ye feel like talkin'. I ain't goin' nowhere, heh.",
+                      },
+                    ],
+                  },
+                ],
+              },
+            ];
+          } else {
+            // Post-loot or no contents - short flavor line
+            steps = [
+              {
+                speaker: 'Grumbold',
+                text: "Zzz... huh? Oh, 'tis you again. Ol' Grumbold ain't goin' nowhere, friend.",
+              },
+            ];
+          }
+
+          startDialogue(k, steps, () => {
+            dialogueActive = false;
+            setUIOpen(false);
+          });
+        };
+
+        return npc;
       },
 
       // WoodenStand - a searchable furniture object that may contain items.
@@ -1330,15 +1446,8 @@ k.scene('prison', (ldtkData) => {
 
           // First time searching - check for items
           if (contents && contents.length > 0) {
-            // Build a message listing found items with capitalized names
-            const displayNames = contents
-              .map((id) =>
-                id
-                  .split('-')
-                  .map((w) => w[0].toUpperCase() + w.slice(1))
-                  .join(' '),
-              )
-              .join(', ');
+            // Build a message listing found items using registry display names
+            const displayNames = contents.map((id) => getItemInfo(id).name).join(', ');
 
             // Add each item to the player's inventory
             for (const item of contents) {
@@ -1373,7 +1482,7 @@ k.scene('prison', (ldtkData) => {
     },
   );
 
-  // Wire up proximity-based interaction (E to interact, F to cycle)
+  // Wire up interaction system (E to interact, Tab to cycle)
   setupInteraction(k, player, entities);
 
   // Q key opens the inventory overlay
@@ -1382,17 +1491,6 @@ k.scene('prison', (ldtkData) => {
     setUIOpen(true);
     dialogueActive = true;
     openInventoryUI(k, inventory, () => {
-      dialogueActive = false;
-      setUIOpen(false);
-    });
-  });
-
-  // After a brief pause so the player can see the prison cell,
-  // start the drunk cellmate's dialogue
-  k.wait(1.5, () => {
-    dialogueActive = true;
-    setUIOpen(true);
-    startDialogue(k, PRISON_DRUNK_DIALOGUE, () => {
       dialogueActive = false;
       setUIOpen(false);
     });

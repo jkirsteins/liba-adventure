@@ -7,6 +7,57 @@
 // pass it around to NPCs, pickups, etc.
 // ==============================================
 
+// ==============================================
+// Item Registry
+// ==============================================
+// Every item ID that appears in LDtk entity
+// `contents` fields must have an entry here.
+// The inventory UI and pickup messages use these
+// display names and descriptions.
+// ==============================================
+
+/**
+ * @typedef {object} ItemInfo
+ * @property {string} name - Display name shown in inventory and pickup messages
+ * @property {string} description - Short flavor text describing the item
+ */
+
+/** @type {Record<string, ItemInfo>} */
+const ITEM_REGISTRY = {
+  'steel-wire': {
+    name: 'Steel Wire',
+    description: 'A thin but sturdy wire. Could pick a lock... or a tooth.',
+  },
+  'rusty-nail': {
+    name: 'Rusty Nail',
+    description: 'A bent nail caked in rust. Tetanus included, free of charge.',
+  },
+};
+
+/**
+ * Look up an item's display info by ID.
+ * Warns and returns a fallback if the ID is missing from the registry.
+ *
+ * @param {string} id - The item ID (e.g. "steel-wire")
+ * @returns {ItemInfo}
+ */
+export function getItemInfo(id) {
+  const info = ITEM_REGISTRY[id];
+  if (!info) {
+    console.warn(
+      `Item "${id}" not found in ITEM_REGISTRY - add an entry in inventory.js`,
+    );
+    return {
+      name: id
+        .split('-')
+        .map((w) => w[0].toUpperCase() + w.slice(1))
+        .join(' '),
+      description: '',
+    };
+  }
+  return info;
+}
+
 /**
  * An inventory object that holds item names as strings.
  * @typedef {object} Inventory
@@ -109,16 +160,31 @@ export function openInventoryUI(k, inventory, onClose) {
     ]);
     uiObjects.push(emptyLabel);
   } else {
-    // Show each item as a white text row
+    // Show each item with its display name and flavor description
+    let y = startY;
     for (let i = 0; i < items.length; i++) {
-      const itemLabel = k.add([
-        k.text(items[i], { size: 16 }),
-        k.pos(padding, startY + i * 24),
+      const info = getItemInfo(items[i]);
+      const nameLabel = k.add([
+        k.text(info.name, { size: 16 }),
+        k.pos(padding, y),
         k.color(255, 255, 255),
         k.fixed(),
         k.z(300),
       ]);
-      uiObjects.push(itemLabel);
+      uiObjects.push(nameLabel);
+      y += 20;
+      if (info.description) {
+        const descLabel = k.add([
+          k.text(info.description, { size: 12 }),
+          k.pos(padding + 12, y),
+          k.color(150, 150, 150),
+          k.fixed(),
+          k.z(300),
+        ]);
+        uiObjects.push(descLabel);
+        y += 18;
+      }
+      y += 6;
     }
   }
 

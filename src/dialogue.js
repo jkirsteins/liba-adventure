@@ -30,6 +30,8 @@
  * A choice the player can pick during dialogue.
  * @typedef {object} DialogueChoice
  * @property {string} text - The text shown for this option
+ * @property {DialogueStep[]} [next] - If present, replaces all remaining steps when this choice is confirmed
+ * @property {function} [onSelect] - If present, called when this choice is confirmed (before next steps show)
  */
 
 /**
@@ -68,6 +70,12 @@ export function startDialogue(k, dialogueSteps, onComplete) {
   const boxY = k.height() - boxHeight;
   const padding = 20;
 
+  // -- Text layout limits --
+  const maxTextWidth = k.width() - 2 * padding;
+  const textFontSize = 16;
+  // Available height for dialogue text (below speaker label, above bottom padding)
+  const textAreaHeight = boxHeight - 2 * padding - 28;
+
   // -- Dark semi-transparent background --
   const bgBox = k.add([
     k.rect(k.width(), boxHeight),
@@ -80,17 +88,16 @@ export function startDialogue(k, dialogueSteps, onComplete) {
 
   // -- Speaker name (yellow/gold) --
   const speakerLabel = k.add([
-    k.text(dialogueSteps[0].speaker, { size: 18 }),
+    k.text('', { size: 18 }),
     k.pos(padding, boxY + padding),
     k.color(255, 204, 0),
     k.fixed(),
     k.z(200),
   ]);
 
-  // -- Dialogue text (white, used for NPC lines and choice prompts) --
-  const firstText = dialogueSteps[0].text || dialogueSteps[0].prompt || '';
+  // -- Dialogue text (white, with word wrap) --
   const dialogueLabel = k.add([
-    k.text(firstText, { size: 16 }),
+    k.text('', { size: textFontSize, width: maxTextWidth }),
     k.pos(padding, boxY + padding + 28),
     k.color(255, 255, 255),
     k.fixed(),
@@ -131,11 +138,6 @@ export function startDialogue(k, dialogueSteps, onComplete) {
     blinkTimer = 0;
   }
 
-  // If the first step is a choice step, hide the indicator right away
-  if (dialogueSteps[0].choices) {
-    hideIndicator();
-  }
-
   // Keep track of all game objects so we can clean up
   const uiObjects = [bgBox, speakerLabel, dialogueLabel, indicator];
 
@@ -144,6 +146,7 @@ export function startDialogue(k, dialogueSteps, onComplete) {
   let choiceLabels = []; // game objects for each choice option
   let choiceHandlers = []; // key handler cancellers for up/down
   let selectedChoice = 0;
+  let choiceStartY = 0; // Y position where choices begin (set in showChoices)
 
   // Remove choice labels from the screen and cancel arrow key handlers
   function cleanupChoices() {
@@ -169,8 +172,41 @@ export function startDialogue(k, dialogueSteps, onComplete) {
     }
   }
 
+  // -- Text pagination --
+  // Splits text that overflows the text area into { fit, overflow }.
+  // Returns overflow: null when the text fits in one page.
+  function splitTextToFit(text) {
+    const fmt = k.formatText({ text, size: textFontSize, width: maxTextWidth });
+    if (fmt.height <= textAreaHeight) return { fit: text, overflow: null };
+
+    // Binary search for how many words fit in one page
+    const words = text.split(' ');
+    let lo = 1;
+    let hi = words.length - 1;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      const chunk = words.slice(0, mid).join(' ');
+      const chunkFmt = k.formatText({
+        text: chunk,
+        size: textFontSize,
+        width: maxTextWidth,
+      });
+      if (chunkFmt.height <= textAreaHeight) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return {
+      fit: words.slice(0, lo).join(' '),
+      overflow: words.slice(lo).join(' '),
+    };
+  }
+
   // Update the visual style of choice labels to reflect the current selection
   function updateChoiceHighlight() {
+    const choiceMaxWidth = maxTextWidth - 10;
+    let y = choiceStartY;
     for (let i = 0; i < choiceLabels.length; i++) {
       const step = dialogueSteps[currentIndex];
       if (i === selectedChoice) {
@@ -182,16 +218,35 @@ export function startDialogue(k, dialogueSteps, onComplete) {
         choiceLabels[i].text = '  ' + step.choices[i].text;
         choiceLabels[i].color = k.rgb(150, 150, 150);
       }
+      choiceLabels[i].pos.y = y;
+      // Measure rendered height for dynamic positioning of next choice
+      const fmt = k.formatText({
+        text: choiceLabels[i].text,
+        size: textFontSize,
+        width: choiceMaxWidth,
+      });
+      y += fmt.height + 4;
     }
   }
 
   // Show the choices for the current step
   function showChoices(step) {
-    const choiceStartY = boxY + padding + 28 + 24;
+    const choiceMaxWidth = maxTextWidth - 10;
+
+    // Measure prompt height to position choices below it
+    const promptText = step.prompt || '';
+    const promptFmt = k.formatText({
+      text: promptText,
+      size: textFontSize,
+      width: maxTextWidth,
+    });
+    const promptHeight = promptFmt.height || 20;
+    choiceStartY = boxY + padding + 28 + promptHeight + 8;
+
     for (let i = 0; i < step.choices.length; i++) {
       const label = k.add([
-        k.text('', { size: 16 }),
-        k.pos(padding + 10, choiceStartY + i * 24),
+        k.text('', { size: textFontSize, width: choiceMaxWidth }),
+        k.pos(padding + 10, choiceStartY),
         k.color(150, 150, 150),
         k.fixed(),
         k.z(200),
@@ -229,8 +284,16 @@ export function startDialogue(k, dialogueSteps, onComplete) {
       hideIndicator();
       showChoices(step);
     } else {
-      // NPC line - update text and show the press-to-continue indicator
-      dialogueLabel.text = step.text;
+      // NPC line - paginate if text overflows the box
+      const { fit, overflow } = splitTextToFit(step.text);
+      dialogueLabel.text = fit;
+      if (overflow) {
+        // Inject the overflow as the next step with the same speaker
+        dialogueSteps.splice(currentIndex + 1, 0, {
+          speaker: step.speaker,
+          text: overflow,
+        });
+      }
       waitingForChoice = false;
       showIndicator();
     }
@@ -241,9 +304,23 @@ export function startDialogue(k, dialogueSteps, onComplete) {
     // If we're on a choice step but the player hasn't confirmed yet,
     // Space/Enter confirms the choice (then advances)
     if (waitingForChoice) {
+      // Capture the selected choice before cleaning up
+      const step = dialogueSteps[currentIndex];
+      const chosen = step.choices[selectedChoice];
+
       // Choice confirmed - clean up choice UI and move on
       cleanupChoices();
       waitingForChoice = false;
+
+      // Call onSelect callback if the choice defines one
+      if (chosen.onSelect) {
+        chosen.onSelect();
+      }
+
+      // If the choice has a next branch, replace all remaining steps
+      if (chosen.next) {
+        dialogueSteps.splice(currentIndex + 1, dialogueSteps.length, ...chosen.next);
+      }
     }
 
     currentIndex++;
@@ -260,45 +337,6 @@ export function startDialogue(k, dialogueSteps, onComplete) {
   const spaceHandler = k.onKeyPress('space', advance);
   const enterHandler = k.onKeyPress('enter', advance);
 
-  // Show the first step's choices if it happens to be a choice step
-  if (dialogueSteps[0].choices) {
-    waitingForChoice = true;
-    showChoices(dialogueSteps[0]);
-  }
+  // Display the first step
+  showStep();
 }
-
-// ==============================================
-// Prison Drunk Cellmate Dialogue
-// ==============================================
-// The first conversation the player has after
-// waking up in the prison cell. A drunk cellmate
-// greets them and asks why they're locked up.
-// ==============================================
-
-/** @type {DialogueStep[]} */
-export const PRISON_DRUNK_DIALOGUE = [
-  {
-    speaker: 'Drunk Cellmate',
-    text: 'Oi there... ye look a bit lost, friend. Welcome to yer new home, heh.',
-  },
-  {
-    speaker: 'Drunk Cellmate',
-    text: "Name's Grumbold. Been in 'ere so long I forgot what the sky looks like.",
-  },
-  {
-    speaker: 'Drunk Cellmate',
-    text: "So tell me... what'd they drag YOU in for?",
-  },
-  {
-    speaker: 'You',
-    prompt: 'Why are you in prison?',
-    choices: [
-      { text: "I was framed! I didn't do anything wrong!" },
-      { text: 'Honestly... I have no idea what happened.' },
-    ],
-  },
-  {
-    speaker: 'Drunk Cellmate',
-    text: "Ha! That's what they ALL say, innit? But don't worry - ol' Grumbold believes ye.",
-  },
-];

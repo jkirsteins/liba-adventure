@@ -11,7 +11,7 @@
 	"iid": "7e050600-fa90-11f0-b33e-85eea610abe5",
 	"jsonVersion": "1.5.3",
 	"appBuildId": 473703,
-	"nextUid": 21,
+	"nextUid": 22,
 	"identifierStyle": "Capitalize",
 	"toc": [],
 	"worldLayout": "Free",
@@ -434,7 +434,45 @@
 			"limitBehavior": "MoveLastOne",
 			"pivotX": 0.5,
 			"pivotY": 1,
-			"fieldDefs": []
+			"fieldDefs": [
+				{
+					"identifier": "contents",
+					"doc": null,
+					"__type": "Array<String>",
+					"uid": 21,
+					"type": "F_String",
+					"isArray": true,
+					"canBeNull": true,
+					"arrayMinLength": null,
+					"arrayMaxLength": null,
+					"editorDisplayMode": "Hidden",
+					"editorDisplayScale": 1,
+					"editorDisplayPos": "Above",
+					"editorLinkStyle": "StraightArrow",
+					"editorDisplayColor": null,
+					"editorAlwaysShow": false,
+					"editorShowInWorld": true,
+					"editorCutLongValues": true,
+					"editorTextSuffix": null,
+					"editorTextPrefix": null,
+					"useForSmartColor": false,
+					"exportToToc": false,
+					"searchable": false,
+					"min": null,
+					"max": null,
+					"regex": null,
+					"acceptFileTypes": null,
+					"defaultOverride": null,
+					"textLanguageMode": null,
+					"symmetricalRef": false,
+					"autoChainRef": true,
+					"allowOutOfLevelRef": true,
+					"allowedRefs": "OnlySame",
+					"allowedRefsEntityUid": null,
+					"allowedRefTags": [],
+					"tilesetUid": null
+				}
+			]
 		},
 		{
 			"identifier": "WoodenStand",
@@ -824,7 +862,10 @@
 							"height": 45,
 							"defUid": 13,
 							"px": [304,80],
-							"fieldInstances": [],
+							"fieldInstances": [{ "__identifier": "contents", "__type": "Array<String>", "__value": ["steel-wire"], "__tile": null, "defUid": 21, "realEditorValues": [{
+								"id": "V_String",
+								"params": ["steel-wire"]
+							}] }],
 							"__worldX": 304,
 							"__worldY": 128
 						},

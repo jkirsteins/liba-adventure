@@ -1,21 +1,22 @@
 // ==============================================
 // Interaction System
 // ==============================================
-// Proximity-based interaction for NPCs and
-// interactable objects. Entities opt in with
-// `interactable: true` and optionally provide
-// `interactLabel` and `onInteract()`.
+// Tab cycles through ALL interactable entities
+// (sorted left-to-right). Moving resets focus to
+// the nearest entity within proximity range.
+// Entities with `globalInteract` can be activated
+// from any distance; others require proximity.
 // ==============================================
 
 // --- UI guard ---
-// When true, E and F key presses are ignored.
+// When true, E and Tab key presses are ignored.
 // Set by dialogue, inventory, or other overlays
 // that should suppress interaction input.
 let uiOpen = false;
 
 /**
  * Set whether a UI overlay is open. While true,
- * interaction keys (E and F) are suppressed.
+ * interaction keys (E and Tab) are suppressed.
  *
  * @param {boolean} val - true to block interactions, false to re-enable
  */
@@ -24,7 +25,7 @@ export function setUIOpen(val) {
 }
 
 /**
- * Set up the proximity-based interaction system.
+ * Set up the interaction system.
  * Call once after a level loads. Returns a cleanup
  * function that cancels all event handlers.
  *
@@ -37,43 +38,87 @@ export function setupInteraction(k, player, entities) {
   // How close the player must be to interact (in game pixels)
   const interactRange = 72;
 
-  // Entities within range, sorted by distance (nearest first)
-  let nearbyEntities = [];
+  // Currently focused entity (or null)
+  let focused = null;
 
-  // Index into nearbyEntities for the currently focused entity
-  let focusIndex = 0;
+  // True when Tab set the current focus (not proximity)
+  let focusedByTab = false;
 
   // Track previously focused entity so we can turn off its outline
   let prevFocused = null;
 
-  // --- Per-frame proximity detection ---
-  const updateHandler = k.onUpdate(() => {
-    // Filter to interactable entities within range
-    const candidates = [];
+  // Helper: compute center of an entity from its pos + size.
+  // Handles both top-left anchored and bot-anchored entities.
+  function entityCenter(entity) {
+    const w = entity.interactW || 32;
+    const h = entity.interactH || 32;
+    if (entity.interactAnchor === 'bot') {
+      // pos is bottom-center, so center is half-height above
+      return k.vec2(entity.pos.x, entity.pos.y - h / 2);
+    }
+    return k.vec2(entity.pos.x + w / 2, entity.pos.y + h / 2);
+  }
+
+  // Helper: get all alive interactable entities sorted left-to-right
+  function allInteractables() {
+    const list = [];
     for (const entity of entities) {
       if (!entity.interactable) continue;
-      // Skip destroyed entities
       if (entity.is && !entity.exists()) continue;
+      list.push(entity);
+    }
+    list.sort((a, b) => entityCenter(a).x - entityCenter(b).x);
+    return list;
+  }
 
-      const dist = player.pos.dist(entity.pos);
-      if (dist <= interactRange) {
-        candidates.push({ entity, dist });
+  // Helper: find the nearest interactable within range
+  function nearestInRange() {
+    let best = null;
+    let bestDist = Infinity;
+    for (const entity of entities) {
+      if (!entity.interactable) continue;
+      if (entity.is && !entity.exists()) continue;
+      const dist = player.pos.dist(entityCenter(entity));
+      if (dist <= interactRange && dist < bestDist) {
+        best = entity;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  // Helper: distance from player to entity center
+  function distTo(entity) {
+    return player.pos.dist(entityCenter(entity));
+  }
+
+  // --- Per-frame update ---
+  const updateHandler = k.onUpdate(() => {
+    // Detect movement - when player is actively moving, clear Tab focus
+    // and snap to nearest proximity entity
+    const isMoving =
+      k.isKeyDown('left') ||
+      k.isKeyDown('right') ||
+      k.isKeyDown('up') ||
+      k.isKeyDown('down');
+
+    if (isMoving && focusedByTab) {
+      // If Tab-focused on a proximity entity that's now out of range, clear focus
+      if (focused && !focused.globalInteract && distTo(focused) > interactRange) {
+        focusedByTab = false;
+        focused = null;
+      } else {
+        focusedByTab = false;
+        focused = nearestInRange();
       }
     }
 
-    // Sort by distance (nearest first)
-    candidates.sort((a, b) => a.dist - b.dist);
-    nearbyEntities = candidates.map((c) => c.entity);
-
-    // Clamp focusIndex when the list changes size
-    if (nearbyEntities.length === 0) {
-      focusIndex = 0;
-    } else if (focusIndex >= nearbyEntities.length) {
-      focusIndex = nearbyEntities.length - 1;
+    // When not Tab-focused, continuously track nearest entity in range
+    if (!focusedByTab) {
+      focused = nearestInRange();
     }
 
     // Toggle the outline shader on the focused entity
-    const focused = nearbyEntities.length > 0 ? nearbyEntities[focusIndex] : null;
     if (prevFocused !== focused) {
       if (prevFocused) prevFocused.outlineEnabled = false;
       if (focused) focused.outlineEnabled = true;
@@ -81,22 +126,11 @@ export function setupInteraction(k, player, entities) {
     }
   });
 
-  // Helper: compute center of an entity from its top-left pos + size
-  function entityCenter(entity) {
-    const w = entity.interactW || 32;
-    const h = entity.interactH || 32;
-    return k.vec2(entity.pos.x + w / 2, entity.pos.y + h / 2);
-  }
-
   // --- Visual indicators ---
-  // Use a high-z invisible game object so our drawing renders on top
-  // of all tiles and entities. Attached onDraw inherits the object's z.
-  // Position at (0,0) so world coordinates pass through unchanged.
   const drawLayer = k.add([k.pos(0, 0), k.z(50)]);
 
   drawLayer.onDraw(() => {
-    // (a) Always-visible pulsing dot above every interactable entity,
-    // regardless of distance, so the player can spot them from afar.
+    // (a) Pulsing dot above every interactable entity
     const pulse = 0.5 + 0.5 * Math.sin(k.time() * 4);
     const dotRadius = 2 + pulse;
 
@@ -106,60 +140,94 @@ export function setupInteraction(k, player, entities) {
 
       const center = entityCenter(entity);
       const h = entity.interactH || 32;
+      // For bot-anchored entities, center is already at mid-height,
+      // so top is center.y - h/2. For top-left, center.y - h/2 is also the top.
+      const dotY = center.y - h / 2 - 6;
       k.drawCircle({
-        pos: k.vec2(center.x, center.y - h / 2 - 6),
+        pos: k.vec2(center.x, dotY),
         radius: dotRadius,
         color: k.Color.fromHex('#ffcc00'),
         opacity: 0.6 + 0.4 * pulse,
       });
     }
 
-    // (d) Draw label above the focused entity (outline is handled by shader)
-    if (nearbyEntities.length === 0) return;
-    const focused = nearbyEntities[focusIndex];
+    // (b) Draw label above the focused entity
     if (!focused) return;
 
     const center = entityCenter(focused);
+    const isInRange = focused.globalInteract || distTo(focused) <= interactRange;
+    const labelOpacity = isInRange ? 1.0 : 0.4;
 
-    // Draw the "E: [label]" prompt above the entity
+    // Label Y position: use entity top edge
+    const h = focused.interactH || 32;
+    const labelY = center.y - h / 2 - 4;
+
+    // Draw the "E: [label]" prompt
     const label = focused.interactLabel || 'Interact';
     k.drawText({
       text: 'E: ' + label,
-      pos: k.vec2(center.x, focused.pos.y - 4),
+      pos: k.vec2(center.x, labelY),
       size: 8,
       anchor: 'bot',
       color: k.Color.WHITE,
+      opacity: labelOpacity,
       outline: { width: 1, color: k.Color.fromHex('#000000') },
     });
 
-    // If there are multiple nearby entities, show a small F-key hint
-    if (nearbyEntities.length > 1) {
+    // Show Tab hint
+    const interactables = allInteractables();
+    if (interactables.length > 1) {
       k.drawText({
-        text: 'F: next (' + (focusIndex + 1) + '/' + nearbyEntities.length + ')',
-        pos: k.vec2(center.x, focused.pos.y - 14),
+        text: 'Tab: next',
+        pos: k.vec2(center.x, labelY - 10),
         size: 6,
         anchor: 'bot',
         color: k.Color.fromHex('#aaaaaa'),
+        opacity: labelOpacity,
         outline: { width: 1, color: k.Color.fromHex('#000000') },
       });
     }
   });
 
-  // --- F key cycles focusIndex (wraps around) ---
-  const fKeyHandler = k.onKeyPress('f', () => {
+  // --- Tab key cycles through all interactables (sorted left-to-right) ---
+  // Cycle includes a "nothing" slot after the last entity:
+  //   entity0 -> entity1 -> ... -> nothing -> entity0
+  const tabKeyHandler = k.onKeyPress('tab', () => {
     if (uiOpen) return;
-    if (nearbyEntities.length <= 1) return;
-    focusIndex = (focusIndex + 1) % nearbyEntities.length;
+    const interactables = allInteractables();
+    if (interactables.length === 0) return;
+
+    const currentIdx = focused ? interactables.indexOf(focused) : -1;
+    const nextIdx = currentIdx + 1;
+
+    if (nextIdx >= interactables.length) {
+      // Past the last entity - select nothing
+      focused = null;
+      focusedByTab = false;
+    } else {
+      focused = interactables[nextIdx];
+      focusedByTab = true;
+    }
   });
 
   // --- E key triggers interaction on the focused entity ---
   const eKeyHandler = k.onKeyPress('e', () => {
     if (uiOpen) return;
-    if (nearbyEntities.length === 0) return;
+    if (!focused) return;
 
-    const focused = nearbyEntities[focusIndex];
-    if (focused && typeof focused.onInteract === 'function') {
-      focused.onInteract();
+    // Global entities can be interacted from anywhere
+    if (focused.globalInteract) {
+      if (typeof focused.onInteract === 'function') {
+        focused.onInteract();
+      }
+      return;
+    }
+
+    // Proximity entities require being within range
+    if (distTo(focused) <= interactRange) {
+      if (typeof focused.onInteract === 'function') {
+        focused.onInteract();
+      }
     }
   });
 
@@ -168,7 +236,7 @@ export function setupInteraction(k, player, entities) {
     if (prevFocused) prevFocused.outlineEnabled = false;
     updateHandler.cancel();
     drawLayer.destroy();
-    fKeyHandler.cancel();
+    tabKeyHandler.cancel();
     eKeyHandler.cancel();
   };
 }
