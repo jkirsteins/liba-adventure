@@ -132,29 +132,8 @@ export function setupInteraction(k, player, entities) {
   const drawLayer = k.add([k.pos(0, 0), k.z(50)]);
 
   drawLayer.onDraw(() => {
-    // (a) Pulsing dot above every interactable entity
-    const pulse = 0.5 + 0.5 * Math.sin(k.time() * 4);
-    const dotRadius = 2 + pulse;
-
-    for (const entity of entities) {
-      if (!entity.interactable) continue;
-      if (entity.is && !entity.exists()) continue;
-
-      const center = entityCenter(entity);
-      const h = entity.interactH || 32;
-      // For bot-anchored entities, center is already at mid-height,
-      // so top is center.y - h/2. For top-left, center.y - h/2 is also the top.
-      const dotY = center.y - h / 2 - 6;
-      k.drawCircle({
-        pos: k.vec2(center.x, dotY),
-        radius: dotRadius,
-        color: k.Color.fromHex('#ffcc00'),
-        opacity: 0.6 + 0.4 * pulse,
-      });
-    }
-
-    // (b) Draw label above the focused entity
-    if (!focused) return;
+    // Draw label above the focused entity (hidden during dialogue/UI)
+    if (!focused || uiOpen) return;
 
     const center = entityCenter(focused);
     const isInRange = focused.globalInteract || distTo(focused) <= interactRange;

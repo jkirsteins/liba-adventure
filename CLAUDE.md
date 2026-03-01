@@ -4,3 +4,4 @@
 - Kaplay is the game engine - its source is at /Users/janis.kirsteins/Projects/kaplay - investigate the source
   code if it can ever help in planning some feature.
 - ARCH.md contains architecture guidelines and constraints for implementing this project technically
+- GAME_DESIGN.md contains game design principles and conventions we should honor

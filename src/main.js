@@ -276,6 +276,39 @@ k.loadSprite('furniture-tiles', 'sprites/tiles/furniture.png', {
   sliceY: 13,
 });
 
+// Quest marker icons - 16 cols x 2 rows, 32x32px per frame
+k.loadSprite('quest-marker', 'sprites/ui/quest-marker.png', {
+  sliceX: 16,
+  sliceY: 2,
+  anims: {
+    question: { from: 0, to: 15, loop: true, speed: 8 },
+    exclamation: { from: 16, to: 31, loop: true, speed: 8 },
+  },
+});
+
+// Emoji icons - 19 cols x 15 rows, 16x16px per frame
+k.loadSprite('emoji', 'sprites/ui/emoji.png', {
+  sliceX: 19,
+  sliceY: 15,
+  anims: {
+    question: { from: 0, to: 18, loop: true, speed: 8 },
+    exclamation: { from: 19, to: 37, loop: true, speed: 8 },
+    skull: { from: 38, to: 56, loop: true, speed: 8 },
+    angry: { from: 57, to: 75, loop: true, speed: 8 },
+    furious: { from: 76, to: 94, loop: true, speed: 8 },
+    rage: { from: 95, to: 113, loop: true, speed: 8 },
+    kiss: { from: 114, to: 132, loop: true, speed: 8 },
+    mad: { from: 133, to: 151, loop: true, speed: 8 },
+    heartEyes: { from: 152, to: 170, loop: true, speed: 8 },
+    love: { from: 171, to: 189, loop: true, speed: 8 },
+    happy: { from: 190, to: 208, loop: true, speed: 8 },
+    grin: { from: 209, to: 227, loop: true, speed: 8 },
+    hearts: { from: 228, to: 246, loop: true, speed: 8 },
+    smile: { from: 247, to: 265, loop: true, speed: 8 },
+    speechBubble: { from: 266, to: 284, loop: true, speed: 8 },
+  },
+});
+
 // --- Outline shader for interactable entities ---
 // Draws a 1px white outline OUTSIDE the sprite silhouette.
 // For each transparent pixel, check if any neighbor is opaque;
@@ -1259,6 +1292,7 @@ k.scene('prison', (ldtkData) => {
           k.sprite('drunkard', { anim: 'idle' }),
           k.pos(entity.px[0], entity.px[1]),
           k.anchor('bot'),
+          k.area({ shape: new k.Rect(k.vec2(-11, -42), 22, 42) }),
           k.z(10),
           k.shader('outline', () => ({
             u_enabled: ref.npc && ref.npc.outlineEnabled ? 1.0 : 0.0,
@@ -1269,9 +1303,35 @@ k.scene('prison', (ldtkData) => {
         const npc = ref.npc;
         npc.outlineEnabled = false;
 
+        // Position markers relative to the hitbox top (more accurate than frame height)
+        const markerY = entity.px[1] - 42 - 4;
+
+        // Quest marker (exclamation) above NPC - shown while items not yet given
+        const questMarker = k.add([
+          k.sprite('quest-marker', { anim: 'exclamation' }),
+          k.pos(entity.px[0], markerY),
+          k.anchor('bot'),
+          k.z(11),
+        ]);
+        questMarker.onUpdate(() => {
+          questMarker.pos.y = markerY + Math.sin(k.time() * 3) * 3;
+        });
+
+        // Speech bubble emoji above NPC - shown only during dialogue
+        const speechBubble = k.add([
+          k.sprite('emoji', { anim: 'speechBubble' }),
+          k.pos(entity.px[0], markerY),
+          k.anchor('bot'),
+          k.z(11),
+        ]);
+        speechBubble.hidden = true;
+
         // Read entity contents (e.g. ["steel-wire"]) and track handoff state
         const contents = getEntityField(entity, 'contents');
         let itemsGiven = false;
+
+        // Only show quest marker when there's actually an item to receive
+        questMarker.hidden = !contents || contents.length === 0;
 
         npc.interactable = true;
         npc.interactLabel = 'Talk';
@@ -1283,6 +1343,8 @@ k.scene('prison', (ldtkData) => {
         npc.onInteract = () => {
           dialogueActive = true;
           setUIOpen(true);
+          questMarker.hidden = true;
+          speechBubble.hidden = false;
 
           let steps;
           if (!itemsGiven && contents && contents.length > 0) {
@@ -1356,6 +1418,10 @@ k.scene('prison', (ldtkData) => {
           startDialogue(k, steps, () => {
             dialogueActive = false;
             setUIOpen(false);
+            speechBubble.hidden = true;
+            if (!itemsGiven) {
+              questMarker.hidden = false;
+            }
           });
         };
 
