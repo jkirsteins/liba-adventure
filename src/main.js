@@ -1981,7 +1981,7 @@ k.scene('prison', (sceneData) => {
 
   // Persistent key-hint bar in the bottom-left corner
   k.add([
-    k.text('E: interact | Q: inventory | F: next item | C: colliders', { size: 10 }),
+    k.text('E: interact | Q: inventory | Tab: next item | C: colliders', { size: 10 }),
     k.pos(8, k.height() - 16),
     k.color(k.Color.fromHex('#aaaaaa')),
     k.fixed(),
